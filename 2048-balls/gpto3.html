@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>2-Ball Merge — 目标 2²⁰！</title>
+<style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto}
+    body{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100vh;background:#111;color:#eee;user-select:none}
+    h1{margin:12px 0;font-size:24px;font-weight:600;letter-spacing:.05em}
+    #canvasWrapper{position:relative;border:3px solid #444;border-radius:8px;overflow:hidden}
+    #gameCanvas{background:#000}
+    #info{margin-top:6px;font-size:14px;opacity:.85}
+    #winBanner{
+        position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+        background:rgba(0,0,0,.83);color:#fff;font-size:32px;font-weight:700;z-index:10;flex-direction:column
+    }
+    #winBanner button{
+        margin-top:16px;padding:8px 18px;font-size:18px;border:none;border-radius:6px;
+        background:#04c;cursor:pointer;color:#fff;transition:all .2s
+    }
+    #winBanner button:hover{transform:scale(1.05)}
+</style>
+</head>
+<body>
+    <h1>合并小球：拼到 2²⁰！</h1>
+
+    <div id="canvasWrapper">
+        <canvas id="gameCanvas" width="480" height="640"></canvas>
+        <div id="winBanner" style="display:none">
+            <div>🎉 你合成了 2²⁰，赢啦！</div>
+            <button onclick="location.reload()">再来一局</button>
+        </div>
+    </div>
+    <div id="info">点击任意横坐标投放当前小球</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"
+        integrity="sha512-d38qo4oNZE3sgYyfUdC/2DwESM8m20coGRdeXXTGsnlLL9IqDkFt4Kw5a5lmYUtkRME4T0AH1+BFAb7aozzkng=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+(()=>{
+
+/* ---------- 参数 ---------- */
+const BASE_RADIUS = 12            // 2¹ 的半径，之后线性递增
+const MAX_EXP     = 20            // 最高目标阶数
+const WIDTH       = 480, HEIGHT = 640
+const COLOR_LIST  = [
+    '#eeeeee','#ffe680','#ffd666','#ffc247','#ffb32f','#ff9d20','#ff8520','#ff6d20',
+    '#ff4d20','#ff2d20','#ff203f','#ff2071','#ff20b2','#d420ff','#8b20ff','#5320ff',
+    '#2057ff','#2090ff','#20bfff','#20ffe9','#20ff94'
+]
+
+/* ---------- Matter.js 基本搭建 ---------- */
+const {Engine,Render,Runner,Bodies,Body,Events,Composite} = Matter
+const engine  = Engine.create()
+const world   = engine.world
+const canvas  = document.getElementById('gameCanvas')
+const render  = Render.create({canvas,engine,options:{
+    width:WIDTH,height:HEIGHT,wireframes:false,background:'#000'
+}})
+Render.run(render)
+const runner  = Runner.create(); Runner.run(runner,engine)
+
+/* 边界 */
+const wallOptions = {isStatic:true,render:{fillStyle:'#444'}}
+Composite.add(world,[
+    Bodies.rectangle(WIDTH/2,-15,WIDTH,30,wallOptions),    // 顶（隐藏避免飞出去）
+    Bodies.rectangle(WIDTH/2,HEIGHT+15,WIDTH,30,wallOptions),
+    Bodies.rectangle(-15,HEIGHT/2,30,HEIGHT,wallOptions),
+    Bodies.rectangle(WIDTH+15,HEIGHT/2,30,HEIGHT,wallOptions)
+])
+
+/* ---------- 游戏状态 ---------- */
+let highestExp = 1      // 当前场上最大阶数（2¹ 起）
+let nextBall   = genRandomExp() // 下一个要投放的小球阶数
+
+/* ---------- 生成球 ---------- */
+function createBall(x, exp){
+    const r = BASE_RADIUS + (exp-1)*3              // 半径随阶数递增
+    const ball = Bodies.circle(x, 0, r, {
+        restitution:0.4, friction:0.02,
+        label:'ball', chamfer:{radius:r*0.5},
+        value:Math.pow(2,exp), exp,
+        render:{
+            fillStyle:COLOR_LIST[(exp-1)%COLOR_LIST.length],
+            strokeStyle:'#000', lineWidth:1,
+            sprite:null
+        }
+    })
+    Composite.add(world, ball)
+    return ball
+}
+
+/* ---------- 随机生成下一个球阶数 ---------- */
+function genRandomExp(){
+    if(highestExp <= 3) return 1        // 前期只掉最小球，方便合成
+    const minExp = 1
+    const maxExp = Math.max(1, highestExp - 2)
+    return Math.floor(Math.random()*(maxExp-minExp+1))+minExp
+}
+
+/* ---------- 点击投放 ---------- */
+canvas.addEventListener('click', e=>{
+    const rect = canvas.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    createBall(x, nextBall)
+    highestExp = Math.max(highestExp, nextBall)
+    nextBall = genRandomExp()
+})
+
+/* ---------- 文字绘制（在每帧 render 后叠字） ---------- */
+Events.on(render, 'afterRender', ()=>{
+    const ctx = render.context
+    ctx.save()
+    ctx.textAlign='center'; ctx.textBaseline='middle'
+    Composite.allBodies(world).forEach(b=>{
+        if(b.label==='ball'){
+            ctx.fillStyle='#fff'
+            ctx.font = (b.circleRadius*0.9)+'px monospace'
+            ctx.fillText(b.value, b.position.x, b.position.y)
+        }
+    })
+    ctx.restore()
+})
+
+/* ---------- 碰撞 + 合并 ---------- */
+Events.on(engine,'collisionStart', e=>{
+    e.pairs.forEach(p=>{
+        let a=p.bodyA, b=p.bodyB
+        if(a.label==='ball' && b.label==='ball' && a.exp===b.exp){
+            // 防止同一对在一次 tick 内被处理多次
+            if(a.isMerging||b.isMerging) return
+            a.isMerging = b.isMerging = true
+
+            // 合成位置用中点
+            const newX = (a.position.x + b.position.x)/2
+            const newY = (a.position.y + b.position.y)/2
+            // 删除旧球
+            Composite.remove(world, a)
+            Composite.remove(world, b)
+            // 新球
+            const newExp = a.exp + 1
+            const newBall = createBall(newX, newExp)
+            Body.setVelocity(newBall, {x:0, y:-5})  // 给予轻微向上动力
+
+            highestExp = Math.max(highestExp, newExp)
+
+            // 胜利检测
+            if(newExp >= MAX_EXP){
+                document.getElementById('winBanner').style.display='flex'
+                Runner.stop(runner); Engine.clear(engine)
+            }
+        }
+    })
+})
+
+/* ---------- 清理出界球 ---------- */
+Events.on(engine,'afterUpdate', ()=>{
+    Composite.allBodies(world).forEach(b=>{
+        if(b.label==='ball' && b.position.y > HEIGHT + 100){
+            Composite.remove(world, b)
+        }
+    })
+})
+
+})()
+</script>
+</body>
+</html>

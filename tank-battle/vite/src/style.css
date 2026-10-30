@@ -1,0 +1,209 @@
+/* 游戏全局样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Arial', sans-serif;
+  overflow: hidden; /* 防止滚动条影响游戏体验 */
+  background: #000;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* UI组件样式 */
+#game-ui {
+  font-family: 'Arial', sans-serif;
+  user-select: none;
+}
+
+/* HUD样式 */
+#game-hud {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+#game-hud div {
+  margin-bottom: 5px;
+}
+
+/* 菜单样式 */
+#main-menu {
+  font-size: 16px;
+  min-width: 400px;
+}
+
+#main-menu h1 {
+  color: #4CAF50;
+  margin-bottom: 30px;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+#main-menu button:hover {
+  background-color: #45a049 !important;
+  transform: scale(1.05);
+}
+
+#main-menu button:active {
+  transform: scale(0.95);
+}
+
+/* 组件选择界面样式 */
+#component-selection {
+  font-size: 14px;
+  min-width: 600px;
+  max-width: 90vw;
+}
+
+#component-selection h2 {
+  color: #4CAF50;
+  margin-bottom: 20px;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.component-category {
+  margin-bottom: 20px;
+}
+
+.component-category h3 {
+  color: #2196F3;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  border-bottom: 2px solid #2196F3;
+}
+
+.component-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.component-item {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.component-item:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.component-item.selected {
+  border-color: #4CAF50;
+  background: rgba(76, 175, 80, 0.2);
+}
+
+.component-preview {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.component-name {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.component-stats {
+  font-size: 12px;
+  opacity: 0.8;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#confirm-selection-btn:hover {
+  background-color: #45a049 !important;
+  transform: scale(1.05);
+}
+
+#confirm-selection-btn:active {
+  transform: scale(0.95);
+}
+
+/* 游戏结束界面样式 */
+#game-over-screen h1 {
+  margin-bottom: 20px;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+#game-over-screen button:hover {
+  transform: scale(1.05);
+}
+
+#game-over-screen button:active {
+  transform: scale(0.95);
+}
+
+/* 按钮通用样式 */
+button {
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+button:hover {
+  transform: scale(1.05);
+}
+
+button:active {
+  transform: scale(0.95);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  #main-menu {
+    min-width: 300px;
+    padding: 20px;
+  }
+
+  #component-selection {
+    min-width: 300px;
+    max-width: 95vw;
+  }
+
+  .component-list {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  #game-hud {
+    font-size: 14px;
+    top: 10px;
+    left: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  #main-menu h1 {
+    font-size: 32px;
+  }
+
+  #main-menu button {
+    font-size: 16px;
+    padding: 10px 20px;
+  }
+
+  #component-selection {
+    min-width: 250px;
+  }
+
+  .component-list {
+    grid-template-columns: 1fr;
+  }
+}

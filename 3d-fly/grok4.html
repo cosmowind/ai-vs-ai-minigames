@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Flying Battle Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #tutorial {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            max-width: 400px;
+            font-family: Arial, sans-serif;
+            z-index: 10;
+            display: none;
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            z-index: 10;
+        }
+        #startButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            font-size: 24px;
+            background: green;
+            color: white;
+            border: none;
+            cursor: pointer;
+            z-index: 20;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        Score: <span id="score">0</span><br>
+        Health: <span id="health">100</span><br>
+        Level: <span id="level">1</span>
+    </div>
+    <div id="tutorial">
+        <h2>Welcome to 3D Flying Battle!</h2>
+        <p>This is a simple 3D flying battle game. Your goal is to survive as long as possible, destroy enemies, collect power-ups, and advance through levels.</p>
+        <h3>Controls:</h3>
+        <ul>
+            <li><strong>W/A/S/D:</strong> Move forward/left/back/right</li>
+            <li><strong>Arrow Up/Down/Left/Right:</strong> Pitch up/down, roll left/right</li>
+            <li><strong>Space:</strong> Shoot bullets</li>
+            <li><strong>Shift:</strong> Boost speed (uses energy, recharges over time)</li>
+        </ul>
+        <h3>Gameplay Elements:</h3>
+        <ul>
+            <li><strong>Enemies (Red Spheres):</strong> They chase you and shoot. Destroy them for points.</li>
+            <li><strong>Power-Ups (Green Cubes):</strong> Collect to restore health or gain shields.</li>
+            <li><strong>Asteroids (Gray Rocks):</strong> Avoid or destroy them; collision damages you.</li>
+            <li><strong>Levels:</strong> Every 1000 points, level up: more enemies, faster speed.</li>
+            <li><strong>Health:</strong> Drops to 0 = Game Over. Regenerates slowly if not damaged.</li>
+            <li><strong>Score Multipliers:</strong> Chain kills for bonuses (e.g., 3 in a row = x2 score).</li>
+            <li><strong>Boss Fights:</strong> Every 5 levels, a big enemy appears with more health.</li>
+        </ul>
+        <h3>Tips:</h3>
+        <ul>
+            <li>Start slow: Practice flying and shooting in early levels.</li>
+            <li>Use boost wisely: Great for escaping, but don't overuse.</li>
+            <li>Aim ahead of moving enemies.</li>
+            <li>Collect power-ups quickly before they disappear.</li>
+        </ul>
+        <button onclick="startGame()">Start Game</button>
+        <button onclick="toggleTutorial()">Close Tutorial</button>
+    </div>
+    <button id="startButton" onclick="showTutorial()">Play</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Player plane (simple box)
+        const playerGeometry = new THREE.BoxGeometry(1, 0.2, 2);
+        const playerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const player = new THREE.Mesh(playerGeometry, playerMaterial);
+        scene.add(player);
+        camera.position.z = 5; // Behind the player
+        player.add(camera); // Attach camera to player for third-person view
+
+        // Variables
+        let score = 0;
+        let health = 100;
+        let level = 1;
+        let enemies = [];
+        let bullets = [];
+        let powerUps = [];
+        let asteroids = [];
+        let boostEnergy = 100;
+        let chainKills = 0;
+        let lastKillTime = 0;
+        let isGameOver = false;
+        let isStarted = false;
+        let boss = null;
+
+        // Controls
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        // Background stars
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsMaterial = new THREE.PointsMaterial({ color: 0xFFFFFF, size: 0.1 });
+        const starsVertices = [];
+        for (let i = 0; i < 10000; i++) {
+            starsVertices.push(THREE.MathUtils.randFloatSpread(2000), THREE.MathUtils.randFloatSpread(2000), THREE.MathUtils.randFloatSpread(2000));
+        }
+        starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+        const stars = new THREE.Points(starsGeometry, starsMaterial);
+        scene.add(stars);
+
+        // Functions
+        function createEnemy() {
+            const geometry = new THREE.SphereGeometry(0.5, 8, 8);
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const enemy = new THREE.Mesh(geometry, material);
+            enemy.position.set(THREE.MathUtils.randFloatSpread(50), THREE.MathUtils.randFloatSpread(50), -100);
+            enemy.health = 20 + level * 5;
+            scene.add(enemy);
+            enemies.push(enemy);
+        }
+
+        function createPowerUp() {
+            const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            const powerUp = new THREE.Mesh(geometry, material);
+            powerUp.position.set(THREE.MathUtils.randFloatSpread(50), THREE.MathUtils.randFloatSpread(50), -100);
+            scene.add(powerUp);
+            powerUps.push(powerUp);
+        }
+
+        function createAsteroid() {
+            const geometry = new THREE.DodecahedronGeometry(1, 0);
+            const material = new THREE.MeshBasicMaterial({ color: 0x808080 });
+            const asteroid = new THREE.Mesh(geometry, material);
+            asteroid.position.set(THREE.MathUtils.randFloatSpread(50), THREE.MathUtils.randFloatSpread(50), -100);
+            asteroid.health = 50;
+            scene.add(asteroid);
+            asteroids.push(asteroid);
+        }
+
+        function createBoss() {
+            const geometry = new THREE.SphereGeometry(3, 16, 16);
+            const material = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+            boss = new THREE.Mesh(geometry, material);
+            boss.position.set(0, 0, -200);
+            boss.health = 500 + level * 100;
+            scene.add(boss);
+        }
+
+        function shootBullet() {
+            const geometry = new THREE.SphereGeometry(0.1, 4, 4);
+            const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+            const bullet = new THREE.Mesh(geometry, material);
+            bullet.position.copy(player.position);
+            bullet.velocity = new THREE.Vector3(0, 0, -5); // Forward
+            bullet.velocity.applyQuaternion(player.quaternion); // Match player direction
+            scene.add(bullet);
+            bullets.push(bullet);
+        }
+
+        function updateHUD() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('health').textContent = health;
+            document.getElementById('level').textContent = level;
+        }
+
+        function checkCollisions() {
+            // Player bullets vs enemies/asteroids/boss
+            bullets.forEach((bullet, bIndex) => {
+                enemies.forEach((enemy, eIndex) => {
+                    if (bullet.position.distanceTo(enemy.position) < 0.6) {
+                        enemy.health -= 10;
+                        scene.remove(bullet);
+                        bullets.splice(bIndex, 1);
+                        if (enemy.health <= 0) {
+                            scene.remove(enemy);
+                            enemies.splice(eIndex, 1);
+                            score += 100 * (chainKills + 1);
+                            chainKills++;
+                            lastKillTime = Date.now();
+                            if (score >= level * 1000) {
+                                level++;
+                                if (level % 5 === 0) createBoss();
+                            }
+                        }
+                    }
+                });
+                asteroids.forEach((asteroid, aIndex) => {
+                    if (bullet.position.distanceTo(asteroid.position) < 1.1) {
+                        asteroid.health -= 10;
+                        scene.remove(bullet);
+                        bullets.splice(bIndex, 1);
+                        if (asteroid.health <= 0) {
+                            scene.remove(asteroid);
+                            asteroids.splice(aIndex, 1);
+                            score += 50;
+                        }
+                    }
+                });
+                if (boss && bullet.position.distanceTo(boss.position) < 3.1) {
+                    boss.health -= 10;
+                    scene.remove(bullet);
+                    bullets.splice(bIndex, 1);
+                    if (boss.health <= 0) {
+                        scene.remove(boss);
+                        boss = null;
+                        score += 1000;
+                    }
+                }
+            });
+
+            // Enemies/asteroids/boss vs player
+            enemies.forEach(enemy => {
+                if (player.position.distanceTo(enemy.position) < 1.5) {
+                    health -= 10;
+                    scene.remove(enemy);
+                    enemies.splice(enemies.indexOf(enemy), 1);
+                }
+            });
+            asteroids.forEach(asteroid => {
+                if (player.position.distanceTo(asteroid.position) < 2) {
+                    health -= 20;
+                    scene.remove(asteroid);
+                    asteroids.splice(asteroids.indexOf(asteroid), 1);
+                }
+            });
+            if (boss && player.position.distanceTo(boss.position) < 4) {
+                health -= 30;
+            }
+
+            // Power-ups vs player
+            powerUps.forEach((powerUp, pIndex) => {
+                if (player.position.distanceTo(powerUp.position) < 1) {
+                    health = Math.min(100, health + 20);
+                    scene.remove(powerUp);
+                    powerUps.splice(pIndex, 1);
+                }
+            });
+        }
+
+        function updateEntities() {
+            // Move bullets
+            bullets.forEach((bullet, index) => {
+                bullet.position.add(bullet.velocity);
+                if (bullet.position.z < -200) {
+                    scene.remove(bullet);
+                    bullets.splice(index, 1);
+                }
+            });
+
+            // Move enemies towards player
+            enemies.forEach(enemy => {
+                const direction = player.position.clone().sub(enemy.position).normalize();
+                enemy.position.add(direction.multiplyScalar(0.5 + level * 0.1));
+            });
+
+            // Move asteroids forward
+            asteroids.forEach(asteroid => {
+                asteroid.position.z += 1;
+                asteroid.rotation.x += 0.01;
+                asteroid.rotation.y += 0.01;
+                if (asteroid.position.z > 50) asteroid.position.z = -100;
+            });
+
+            // Move boss
+            if (boss) {
+                const direction = player.position.clone().sub(boss.position).normalize();
+                boss.position.add(direction.multiplyScalar(0.3));
+            }
+
+            // Power-ups drift
+            powerUps.forEach(powerUp => {
+                powerUp.position.z += 0.5;
+                if (powerUp.position.z > 50) {
+                    scene.remove(powerUp);
+                    powerUps.splice(powerUps.indexOf(powerUp), 1);
+                }
+            });
+        }
+
+        function playerMovement() {
+            let speed = 0.5;
+            if (keys['ShiftLeft'] && boostEnergy > 0) {
+                speed *= 2;
+                boostEnergy -= 1;
+            } else {
+                boostEnergy = Math.min(100, boostEnergy + 0.1);
+            }
+
+            if (keys['KeyW']) player.translateZ(-speed); // Forward
+            if (keys['KeyS']) player.translateZ(speed); // Back
+            if (keys['KeyA']) player.translateX(-speed / 2); // Left
+            if (keys['KeyD']) player.translateX(speed / 2); // Right
+
+            if (keys['ArrowUp']) player.rotateX(-0.02); // Pitch up
+            if (keys['ArrowDown']) player.rotateX(0.02); // Pitch down
+            if (keys['ArrowLeft']) player.rotateZ(0.02); // Roll left
+            if (keys['ArrowRight']) player.rotateZ(-0.02); // Roll right
+
+            if (keys['Space']) shootBullet(); // Shoot
+
+            // Chain kill timer
+            if (Date.now() - lastKillTime > 3000) chainKills = 0;
+        }
+
+        function spawnEntities() {
+            if (Math.random() < 0.02 + level * 0.005) createEnemy();
+            if (Math.random() < 0.01) createPowerUp();
+            if (Math.random() < 0.015) createAsteroid();
+        }
+
+        function regenerateHealth() {
+            if (health < 100) health += 0.05;
+        }
+
+        function checkGameOver() {
+            if (health <= 0) {
+                isGameOver = true;
+                alert(`Game Over! Final Score: ${score} | Level: ${level}`);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isStarted || isGameOver) return;
+
+            playerMovement();
+            updateEntities();
+            checkCollisions();
+            spawnEntities();
+            regenerateHealth();
+            checkGameOver();
+            updateHUD();
+
+            renderer.render(scene, camera);
+        }
+
+        function showTutorial() {
+            document.getElementById('tutorial').style.display = 'block';
+            document.getElementById('startButton').style.display = 'none';
+        }
+
+        function toggleTutorial() {
+            document.getElementById('tutorial').style.display = document.getElementById('tutorial').style.display === 'none' ? 'block' : 'none';
+        }
+
+        function startGame() {
+            document.getElementById('tutorial').style.display = 'none';
+            isStarted = true;
+            animate();
+        }
+
+        // Initial call
+        animate();
+    </script>
+</body>
+</html>

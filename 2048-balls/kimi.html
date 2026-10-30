@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2048 小球合并游戏</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            border: 2px solid #fff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+        
+        #gameInfo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        #nextBall {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-size: 16px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="gameInfo">
+        <div>分数: <span id="score">0</span></div>
+        <div>最大球: <span id="maxBall">2</span></div>
+    </div>
+    <div id="nextBall">
+        <div>下一个球: <span id="nextValue">2</span></div>
+    </div>
+    <div id="instructions">
+        点击画布上方选择下落位置，合并相同数字的小球！
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 设置画布大小
+        canvas.width = 400;
+        canvas.height = 600;
+        
+        // 游戏参数
+        const GRAVITY = 0.5;
+        const FRICTION = 0.98;
+        const RESTITUTION = 0.7;
+        const MIN_RADIUS = 15;
+        const MAX_BALL_VALUE = Math.pow(2, 20);
+        
+        // 颜色映射
+        const colors = {
+            2: '#EEE4DA',
+            4: '#EDE0C8',
+            8: '#F2B179',
+            16: '#F59563',
+            32: '#F67C5F',
+            64: '#F65E3B',
+            128: '#EDCF72',
+            256: '#EDCC61',
+            512: '#EDC850',
+            1024: '#EDC53F',
+            2048: '#EDC22E',
+            4096: '#3C3A32',
+            8192: '#776E65',
+            16384: '#8F7A66',
+            32768: '#9C8B7A',
+            65536: '#A68D6A',
+            131072: '#BFA58C',
+            262144: '#D4B896',
+            524288: '#E8CAA0',
+            1048576: '#F2DAB4'
+        };
+        
+        let balls = [];
+        let nextBallValue = 2;
+        let score = 0;
+        let maxBallAchieved = 2;
+        
+        // 球类
+        class Ball {
+            constructor(x, y, value) {
+                this.x = x;
+                this.y = y;
+                this.vx = 0;
+                this.vy = 0;
+                this.value = value;
+                this.radius = MIN_RADIUS + Math.log2(value) * 3;
+                this.color = colors[value] || '#3C3A32';
+                this.merged = false;
+            }
+            
+            update() {
+                if (this.merged) return;
+                
+                // 应用重力
+                this.vy += GRAVITY;
+                
+                // 应用摩擦力
+                this.vx *= FRICTION;
+                this.vy *= FRICTION;
+                
+                // 更新位置
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // 边界碰撞
+                if (this.x - this.radius < 0) {
+                    this.x = this.radius;
+                    this.vx = -this.vx * RESTITUTION;
+                }
+                if (this.x + this.radius > canvas.width) {
+                    this.x = canvas.width - this.radius;
+                    this.vx = -this.vx * RESTITUTION;
+                }
+                if (this.y + this.radius > canvas.height) {
+                    this.y = canvas.height - this.radius;
+                    this.vy = -Math.abs(this.vy) * RESTITUTION;
+                }
+            }
+            
+            draw() {
+                if (this.merged) return;
+                
+                // 绘制球体
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.strokeStyle = '#776E65';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // 绘制数字
+                ctx.fillStyle = this.value > 512 ? '#F9F6F2' : '#776E65';
+                ctx.font = `bold ${Math.min(20, this.radius)}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.value, this.x, this.y);
+            }
+        }
+        
+        // 检测碰撞
+        function checkCollision(ball1, ball2) {
+            const dx = ball1.x - ball2.x;
+            const dy = ball1.y - ball2.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < ball1.radius + ball2.radius;
+        }
+        
+        // 处理碰撞
+        function handleCollision(ball1, ball2) {
+            if (ball1.merged || ball2.merged) return;
+            
+            if (ball1.value === ball2.value) {
+                // 合并球
+                const newX = (ball1.x + ball2.x) / 2;
+                const newY = (ball1.y + ball2.y) / 2;
+                const newValue = ball1.value * 2;
+                
+                ball1.merged = true;
+                ball2.merged = true;
+                
+                const newBall = new Ball(newX, newY, newValue);
+                balls.push(newBall);
+                
+                score += newValue;
+                if (newValue > maxBallAchieved) {
+                    maxBallAchieved = newValue;
+                }
+                
+                updateUI();
+                
+                // 检查胜利条件
+                if (newValue === MAX_BALL_VALUE) {
+                    alert('恭喜你！成功合成了 2^20 的球！');
+                    resetGame();
+                }
+            } else {
+                // 弹性碰撞
+                const dx = ball2.x - ball1.x;
+                const dy = ball2.y - ball1.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance === 0) return;
+                
+                const nx = dx / distance;
+                const ny = dy / distance;
+                
+                const dvx = ball2.vx - ball1.vx;
+                const dvy = ball2.vy - ball1.vy;
+                const dvn = dvx * nx + dvy * ny;
+                
+                if (dvn > 0) return;
+                
+                const impulse = 2 * dvn / (ball1.radius + ball2.radius);
+                
+                ball1.vx += impulse * ball2.radius * nx;
+                ball1.vy += impulse * ball2.radius * ny;
+                ball2.vx -= impulse * ball1.radius * nx;
+                ball2.vy -= impulse * ball1.radius * ny;
+                
+                // 分离重叠的球
+                const overlap = ball1.radius + ball2.radius - distance;
+                const separationX = nx * overlap / 2;
+                const separationY = ny * overlap / 2;
+                
+                ball1.x -= separationX;
+                ball1.y -= separationY;
+                ball2.x += separationX;
+                ball2.y += separationY;
+            }
+        }
+        
+        // 生成下一个球的值
+        function generateNextBallValue() {
+            const maxExisting = balls.length > 0 ? Math.max(...balls.filter(b => !b.merged).map(b => b.value)) : 2;
+            const k = Math.floor(Math.log2(maxExisting));
+            const maxPossible = Math.pow(2, Math.max(1, k - 2));
+            
+            const possibleValues = [];
+            for (let i = 2; i <= Math.min(maxPossible, MAX_BALL_VALUE); i *= 2) {
+                possibleValues.push(i);
+            }
+            
+            nextBallValue = possibleValues[Math.floor(Math.random() * possibleValues.length)] || 2;
+        }
+        
+        // 更新UI
+        function updateUI() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('maxBall').textContent = maxBallAchieved;
+            document.getElementById('nextValue').textContent = nextBallValue;
+        }
+        
+        // 游戏循环
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 更新和绘制球
+            balls = balls.filter(ball => !ball.merged);
+            balls.forEach(ball => ball.update());
+            
+            // 检测碰撞
+            for (let i = 0; i < balls.length; i++) {
+                for (let j = i + 1; j < balls.length; j++) {
+                    if (checkCollision(balls[i], balls[j])) {
+                        handleCollision(balls[i], balls[j]);
+                    }
+                }
+            }
+            
+            balls.forEach(ball => ball.draw());
+            
+            // 绘制下一个球的预览
+            const previewY = 30;
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, previewY, MIN_RADIUS + Math.log2(nextBallValue) * 3, 0, Math.PI * 2);
+            ctx.fillStyle = colors[nextBallValue] || '#3C3A32';
+            ctx.fill();
+            ctx.strokeStyle = '#776E65';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.fillStyle = nextBallValue > 512 ? '#F9F6F2' : '#776E65';
+            ctx.font = `bold ${Math.min(20, MIN_RADIUS + Math.log2(nextBallValue) * 3)}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(nextBallValue, canvas.width / 2, previewY);
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // 处理点击事件
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = 30; // 从顶部开始下落
+            
+            const newBall = new Ball(x, y, nextBallValue);
+            balls.push(newBall);
+            
+            generateNextBallValue();
+            updateUI();
+        });
+        
+        // 重置游戏
+        function resetGame() {
+            balls = [];
+            score = 0;
+            maxBallAchieved = 2;
+            generateNextBallValue();
+            updateUI();
+        }
+        
+        // 初始化游戏
+        generateNextBallValue();
+        updateUI();
+        gameLoop();
+    </script>
+</body>
+</html>

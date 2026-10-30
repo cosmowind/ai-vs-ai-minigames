@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D坦克大战 - Tank Battle</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            overflow: hidden;
+            color: white;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #gameCanvas {
+            display: block;
+            cursor: crosshair;
+        }
+        
+        #gameUI {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        #tankConfigPanel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            pointer-events: auto;
+            max-width: 350px;
+        }
+        
+        #gameHUD {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+        
+        .component-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .component-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .quality-common { border-left: 4px solid #ffffff; }
+        .quality-rare { border-left: 4px solid #00ff00; }
+        .quality-epic { border-left: 4px solid #0066ff; }
+        .quality-legendary { border-left: 4px solid #ff6600; }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        #loadingScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="loadingScreen">
+            <div class="spinner"></div>
+            <h2>加载3D坦克大战...</h2>
+            <p>正在初始化物理引擎和游戏世界</p>
+        </div>
+        
+        <div id="gameUI">
+            <div id="tankConfigPanel">
+                <h3>🔧 坦克配置</h3>
+                <div id="componentsList">
+                    <h4>可选组件</h4>
+                    <div id="availableComponents"></div>
+                </div>
+                
+                <div id="selectedComponents">
+                    <h4>已选组件</h4>
+                    <div id="currentComponents"></div>
+                </div>
+                
+                <div id="tankStats">
+                    <h4>坦克属性</h4>
+                    <div>总重量: <span id="totalWeight">0</span> kg</div>
+                    <div>最大速度: <span id="maxSpeed">0</span> km/h</div>
+                    <div>总血量: <span id="totalHealth">100</span> HP</div>
+                </div>
+                
+                <button id="buildTankBtn">🚀 构建坦克</button>
+                <button id="resetTankBtn">🔄 重置配置</button>
+            </div>
+            
+            <div id="gameHUD">
+                <h4>⚔️ 战斗状态</h4>
+                <div>血量: <span id="playerHealth">100</span> HP</div>
+                <div>速度: <span id="playerSpeed">0</span> km/h</div>
+                <div>重量: <span id="playerWeight">500</span> kg</div>
+                <div id="gameStatus">准备战斗</div>
+            </div>
+            
+            <div id="controls">
+                <h4>🎮 控制说明</h4>
+                <div>W/S - 前进/后退</div>
+                <div>A/D - 左转/右转</div>
+                <div>空格 - 手刹</div>
+                <div>R - 重置位置</div>
+                <div>C - 切换视角</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 引入Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- 引入Cannon.js物理引擎 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.20.0/cannon.min.js"></script>
+    <!-- 轨道控制器 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- 游戏核心脚本 -->
+    <script src="js/core/GameEngine.js"></script>
+    <script src="js/components/Component.js"></script>
+    <script src="js/components/EngineComponent.js"></script>
+    <script src="js/components/ArmorComponent.js"></script>
+    <script src="js/systems/QualitySystem.js"></script>
+    <script src="js/systems/PhysicsSystem.js"></script>
+    <script src="js/entities/Tank.js"></script>
+    <script src="js/entities/TankBuilder.js"></script>
+    <script src="js/systems/CollisionSystem.js"></script>
+    <script src="js/systems/InputSystem.js"></script>
+    <script src="js/world/Battlefield.js"></script>
+    <script src="js/ui/GameUI.js"></script>
+    <script src="js/core/GameLoop.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

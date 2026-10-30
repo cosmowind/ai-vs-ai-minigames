@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D飞行大战</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+<div id="instructions">
+    <h2>飞行大战操作指南</h2>
+    <p>移动：W/A/S/D键控制上下左右</p>
+    <p>加速：Shift键</p>
+    <p>射击：空格键</p>
+    <p>开始游戏：点击屏幕</p>
+    <p>目标：击毁所有敌机！</p>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js "></script>
+<script>
+let scene, camera, renderer, player, bullets = [], enemies = [];
+let keys = {}, score = 0, lives = 3;
+let moveSpeed = 0.2, bulletSpeed = 0.5;
+
+// 初始化场景
+function init() {
+    // 创建渲染器
+    renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // 创建场景
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+
+    // 创建相机
+    camera = new THREE.PerspectiveCamera(
+        75, 
+        window.innerWidth/window.innerHeight, 
+        0.1, 
+        1000
+    );
+    
+    // 创建玩家飞机
+    const playerGeometry = new THREE.BoxGeometry(0.5, 0.5, 1);
+    const playerMaterial = new THREE.MeshBasicMaterial({color: 0x00ff00});
+    player = new THREE.Mesh(playerGeometry, playerMaterial);
+    scene.add(player);
+    
+    // 添加光源
+    const light = new THREE.PointLight(0xffffff, 1, 100);
+    light.position.set(0, 10, 25);
+    scene.add(light);
+
+    // 设置相机初始位置
+    camera.position.z = 5;
+    
+    // 监听窗口大小变化
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth/window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // 键盘事件监听
+    document.addEventListener('keydown', (e) => {
+        keys[e.code] = true;
+        if(e.code === 'Space') shootBullet();
+    });
+    
+    document.addEventListener('keyup', (e) => {
+        keys[e.code] = false;
+    });
+
+    // 点击开始游戏
+    document.addEventListener('click', () => {
+        animate();
+        document.getElementById('instructions').style.display = 'none';
+        spawnEnemies();
+    });
+}
+
+// 子弹生成
+function shootBullet() {
+    const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+    const bulletMaterial = new THREE.MeshBasicMaterial({color: 0xffff00});
+    const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+    bullet.position.copy(player.position);
+    bullet.userData = {isBullet: true};
+    scene.add(bullet);
+    bullets.push(bullet);
+}
+
+// 敌人生成
+function spawnEnemies() {
+    for(let i = 0; i < 10; i++) {
+        const enemyGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const enemyMaterial = new THREE.MeshBasicMaterial({color: 0xff0000});
+        const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+        enemy.position.set(
+            Math.random() * 20 - 10,
+            Math.random() * 5 + 5,
+            -Math.random() * 50 - 20
+        );
+        enemy.userData = {isEnemy: true, speed: 0.05};
+        scene.add(enemy);
+        enemies.push(enemy);
+    }
+}
+
+// 移动控制
+function movePlayer() {
+    if(keys['KeyW']) player.position.y += moveSpeed;
+    if(keys['KeyS']) player.position.y -= moveSpeed;
+    if(keys['KeyA']) player.position.x -= moveSpeed;
+    if(keys['KeyD']) player.position.x += moveSpeed;
+    if(keys['ShiftLeft']) moveSpeed = 0.4;
+    else moveSpeed = 0.2;
+    
+    // 限制边界
+    player.position.x = Math.max(Math.min(player.position.x, 10), -10);
+    player.position.y = Math.max(Math.min(player.position.y, 5), -5);
+}
+
+// 子弹运动
+function updateBullets() {
+    bullets.forEach((bullet, index) => {
+        bullet.position.z -= bulletSpeed;
+        
+        // 移除超出范围的子弹
+        if(bullet.position.z < -100) {
+            scene.remove(bullet);
+            bullets.splice(index, 1);
+        }
+    });
+}
+
+// 敌人运动
+function updateEnemies() {
+    enemies.forEach((enemy, index) => {
+        enemy.position.y -= enemy.userData.speed;
+        enemy.position.z += 0.05;
+        
+        // 碰撞检测
+        enemies.forEach((otherEnemy, otherIndex) => {
+            if(index !== otherIndex && enemy.position.distanceTo(otherEnemy.position) < 0.5) {
+                enemy.position.y += 0.5;
+            }
+        });
+        
+        // 检测玩家碰撞
+        if(enemy.position.distanceTo(player.position) < 0.7) {
+            lives--;
+            scene.remove(enemy);
+            enemies.splice(index, 1);
+            if(lives <= 0) gameOver();
+        }
+    });
+}
+
+// 碰撞检测
+function checkCollisions() {
+    bullets.forEach((bullet, bulletIndex) => {
+        enemies.forEach((enemy, enemyIndex) => {
+            if(bullet.position.distanceTo(enemy.position) < 0.5) {
+                // 销毁子弹和敌人
+                scene.remove(bullet);
+                scene.remove(enemy);
+                bullets.splice(bulletIndex, 1);
+                enemies.splice(enemyIndex, 1);
+                score += 100;
+                console.log("击毁敌机！当前得分：" + score);
+            }
+        });
+    });
+}
+
+// 游戏结束
+function gameOver() {
+    alert("游戏结束！最终得分：" + score);
+    // 重置游戏
+    score = 0;
+    lives = 3;
+    bullets.forEach(b => scene.remove(b));
+    enemies.forEach(e => scene.remove(e));
+    bullets = [];
+    enemies = [];
+    spawnEnemies();
+}
+
+// 动画循环
+function animate() {
+    requestAnimationFrame(animate);
+    
+    movePlayer();
+    updateBullets();
+    updateEnemies();
+    checkCollisions();
+    
+    // 相机跟随
+    camera.position.x = player.position.x;
+    camera.position.y = player.position.y + 2;
+    camera.position.z = player.position.z + 5;
+    camera.lookAt(player.position);
+    
+    renderer.render(scene, camera);
+}
+
+// 启动游戏
+init();
+</script>
+</body>
+</html>

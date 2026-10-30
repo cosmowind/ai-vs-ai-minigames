@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Merge Physics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#FF7D00',
+                        dark: '#1D2939',
+                        light: '#F9FAFB'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .glass {
+                backdrop-filter: blur(10px);
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .animate-float {
+                animation: float 3s ease-in-out infinite;
+            }
+            @keyframes float {
+                0% { transform: translateY(0px); }
+                50% { transform: translateY(-10px); }
+                100% { transform: translateY(0px); }
+            }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-dark to-gray-800 min-h-screen font-inter text-light overflow-hidden">
+    <div class="relative w-full h-screen flex flex-col items-center justify-start p-4 md:p-8">
+        <!-- 游戏标题和信息 -->
+        <header class="w-full max-w-4xl flex flex-col md:flex-row items-center justify-between mb-4 md:mb-8">
+            <div class="flex items-center mb-4 md:mb-0">
+                <div class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mr-3">
+                    <span class="text-primary text-2xl font-bold">2<span class="text-xs align-top">20</span></span>
+                </div>
+                <h1 class="text-[clamp(1.5rem,5vw,2.5rem)] font-bold text-shadow">Power Merge</h1>
+            </div>
+            
+            <div class="flex flex-wrap gap-3">
+                <div class="glass p-3 rounded-xl min-w-[120px] text-center">
+                    <p class="text-xs uppercase tracking-wider text-gray-300 mb-1">Score</p>
+                    <p id="score" class="text-xl font-bold text-secondary">0</p>
+                </div>
+                <div class="glass p-3 rounded-xl min-w-[120px] text-center">
+                    <p class="text-xs uppercase tracking-wider text-gray-300 mb-1">Best</p>
+                    <p id="best-score" class="text-xl font-bold text-secondary">0</p>
+                </div>
+                <button id="restart-btn" class="bg-primary hover:bg-primary/90 text-white px-4 py-3 rounded-xl flex items-center transition-all duration-300 hover:shadow-lg hover:shadow-primary/20">
+                    <i class="fa fa-refresh mr-2"></i> Restart
+                </button>
+            </div>
+        </header>
+        
+        <!-- 游戏区域 -->
+        <main class="relative w-full max-w-4xl aspect-[4/3] rounded-2xl overflow-hidden bg-gray-900/50 border border-gray-700/50 shadow-2xl shadow-black/30">
+            <!-- 游戏画布 -->
+            <canvas id="gameCanvas" class="w-full h-full"></canvas>
+            
+            <!-- 游戏说明覆盖层 -->
+            <div id="gameOverlay" class="absolute inset-0 flex flex-col items-center justify-center bg-dark/80 backdrop-blur-sm p-6 z-10">
+                <h2 class="text-2xl md:text-3xl font-bold mb-4 text-primary">How to Play</h2>
+                <div class="max-w-md text-center space-y-4">
+                    <p>Combine balls with the same number to create the 2²⁰ ball!</p>
+                    <div class="grid grid-cols-2 gap-4 mt-4">
+                        <div class="glass p-3 rounded-lg">
+                            <i class="fa fa-hand-pointer-o text-primary text-xl mb-2"></i>
+                            <p class="text-sm">Click to place ball</p>
+                        </div>
+                        <div class="glass p-3 rounded-lg">
+                            <i class="fa fa-arrows text-primary text-xl mb-2"></i>
+                            <p class="text-sm">Drag to move camera</p>
+                        </div>
+                        <div class="glass p-3 rounded-lg">
+                            <i class="fa fa-search-plus text-primary text-xl mb-2"></i>
+                            <p class="text-sm">Scroll to zoom</p>
+                        </div>
+                        <div class="glass p-3 rounded-lg">
+                            <i class="fa fa-refresh text-primary text-xl mb-2"></i>
+                            <p class="text-sm">R to restart</p>
+                        </div>
+                    </div>
+                    <button id="start-btn" class="mt-6 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-primary/20">
+                        Start Game
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 游戏结束覆盖层 -->
+            <div id="gameOver" class="absolute inset-0 flex-col items-center justify-center bg-dark/80 backdrop-blur-sm p-6 z-10 hidden">
+                <h2 class="text-2xl md:text-3xl font-bold mb-2 text-primary">Game Over</h2>
+                <p id="final-score" class="text-xl mb-4">Your Score: 0</p>
+                <div class="flex gap-3">
+                    <button id="try-again-btn" class="bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-primary/20">
+                        Try Again
+                    </button>
+                    <button id="continue-btn" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-xl transition-all duration-300">
+                        Keep Playing
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 胜利覆盖层 -->
+            <div id="victory" class="absolute inset-0 flex-col items-center justify-center bg-primary/80 backdrop-blur-sm p-6 z-10 hidden">
+                <div class="text-center">
+                    <div class="inline-block p-3 bg-white/20 rounded-full mb-4 animate-float">
+                        <i class="fa fa-trophy text-4xl text-yellow-400"></i>
+                    </div>
+                    <h2 class="text-2xl md:text-3xl font-bold mb-2 text-white">Congratulations!</h2>
+                    <p class="text-xl mb-4 text-white">You've created the 2²⁰ ball!</p>
+                    <div class="flex gap-3 justify-center">
+                        <button id="play-again-btn" class="bg-white hover:bg-gray-100 text-primary px-6 py-3 rounded-xl transition-all duration-300 hover:shadow-lg">
+                            Play Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- 游戏说明 -->
+        <div class="w-full max-w-4xl mt-4 md:mt-6 text-sm text-gray-400">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="glass p-4 rounded-xl">
+                    <h3 class="font-semibold text-primary mb-2">Objective</h3>
+                    <p>Combine balls with the same number to create larger powers of two. Your goal is to create the 2²⁰ ball.</p>
+                </div>
+                <div class="glass p-4 rounded-xl">
+                    <h3 class="font-semibold text-primary mb-2">Rules</h3>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>Balls will fall from where you click</li>
+                        <li>Same numbers combine into the next power of two</li>
+                        <li>Score points for each combination</li>
+                        <li>Game ends when you can't place a new ball</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 游戏画布设置
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 确保画布大小正确
+            function resizeCanvas() {
+                const container = canvas.parentElement;
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+            }
+            
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // 游戏状态
+            const gameState = {
+                balls: [],
+                nextBall: null,
+                score: 0,
+                bestScore: localStorage.getItem('powerMergeBestScore') || 0,
+                gameOver: false,
+                victory: false,
+                isPaused: true,
+                camera: {
+                    x: 0,
+                    y: 0,
+                    scale: 1
+                },
+                dragStart: null,
+                lastTimestamp: 0,
+                mergeAnimations: []
+            };
+            
+            // 更新最高分显示
+            document.getElementById('best-score').textContent = gameState.bestScore;
+            
+            // 颜色映射 - 为2的不同幂次分配不同颜色
+            const colorMap = [
+                '#FFFFFF', '#FFE0B2', '#FFCC80', '#FFB74D', '#FFA726', 
+                '#FF9800', '#FB8C00', '#F57C00', '#EF6C00', '#E65100',
+                '#FF5722', '#F4511E', '#E53935', '#D32F2F', '#C62828',
+                '#B71C1C', '#880E4F', '#4A148C', '#283593', '#0D47A1'
+            ];
+            
+            // 球体类
+            class Ball {
+                constructor(x, y, power = 1) {
+                    this.x = x;
+                    this.y = y;
+                    this.power = power; // 2的幂次
+                    this.value = Math.pow(2, power);
+                    this.radius = 15 + power * 3; // 球体大小随幂次增加
+                    this.vx = 0;
+                    this.vy = 0;
+                    this.gravity = 0.5;
+                    this.damping = 0.8; // 阻尼因子
+                    this.restitution = 0.7; // 弹性系数
+                    this.color = colorMap[power] || '#FFFFFF';
+                    this.isMerging = false;
+                    this.mergeTarget = null;
+                    this.mergeProgress = 0;
+                }
+                
+                update(deltaTime) {
+                    if (this.isMerging) {
+                        // 合并动画
+                        this.mergeProgress += deltaTime * 0.005;
+                        if (this.mergeProgress >= 1) {
+                            // 合并完成
+                            return true;
+                        }
+                        
+                        // 向目标移动
+                        const dx = this.mergeTarget.x - this.x;
+                        const dy = this.mergeTarget.y - this.y;
+                        this.x += dx * this.mergeProgress * 5 * deltaTime * 0.016;
+                        this.y += dy * this.mergeProgress * 5 * deltaTime * 0.016;
+                        
+                        // 缩放到目标大小
+                        const targetRadius = this.radius + this.mergeTarget.radius * 0.7;
+                        this.radius = this.radius + (targetRadius - this.radius) * this.mergeProgress * 2 * deltaTime * 0.016;
+                        
+                        return false;
+                    }
+                    
+                    // 应用重力
+                    this.vy += this.gravity;
+                    
+                    // 更新位置
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    
+                    // 边界碰撞检测
+                    if (this.x - this.radius < 0) {
+                        this.x = this.radius;
+                        this.vx = -this.vx * this.restitution;
+                    } else if (this.x + this.radius > canvas.width) {
+                        this.x = canvas.width - this.radius;
+                        this.vx = -this.vx * this.restitution;
+                    }
+                    
+                    if (this.y - this.radius < 0) {
+                        this.y = this.radius;
+                        this.vy = -this.vy * this.restitution;
+                    } else if (this.y + this.radius > canvas.height) {
+                        this.y = canvas.height - this.radius;
+                        this.vy = -this.vy * this.restitution;
+                    }
+                    
+                    // 应用阻尼
+                    this.vx *= this.damping;
+                    this.vy *= this.damping;
+                    
+                    return false;
+                }
+                
+                draw() {
+                    // 应用相机变换
+                    const cx = (this.x - gameState.camera.x) * gameState.camera.scale;
+                    const cy = (this.y - gameState.camera.y) * gameState.camera.scale;
+                    const cr = this.radius * gameState.camera.scale;
+                    
+                    // 绘制球体
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+                    
+                    // 创建径向渐变
+                    const gradient = ctx.createRadialGradient(
+                        cx - cr * 0.3, cy - cr * 0.3, cr * 0.1,
+                        cx, cy, cr
+                    );
+                    gradient.addColorStop(0, '#FFFFFF40');
+                    gradient.addColorStop(1, this.color);
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.fill();
+                    
+                    // 绘制边框
+                    ctx.lineWidth = 2 * gameState.camera.scale;
+                    ctx.strokeStyle = '#00000020';
+                    ctx.stroke();
+                    
+                    // 绘制球体上的数字
+                    ctx.font = `${Math.max(10, cr * 0.6)}px Inter, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#00000080';
+                    ctx.fillText(this.value, cx, cy);
+                    
+                    // 如果是合并动画中的球体，绘制合并进度环
+                    if (this.isMerging) {
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, cr, 0, Math.PI * 2 * this.mergeProgress);
+                        ctx.strokeStyle = '#FFFFFF80';
+                        ctx.lineWidth = 3 * gameState.camera.scale;
+                        ctx.stroke();
+                    }
+                }
+                
+                // 检查与另一个球体的碰撞
+                checkCollision(otherBall) {
+                    if (this.isMerging || otherBall.isMerging) return false;
+                    
+                    const dx = otherBall.x - this.x;
+                    const dy = otherBall.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    return distance < this.radius + otherBall.radius;
+                }
+                
+                // 处理与另一个球体的碰撞
+                handleCollision(otherBall) {
+                    if (this.isMerging || otherBall.isMerging) return false;
+                    
+                    const dx = otherBall.x - this.x;
+                    const dy = otherBall.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // 如果距离为0，不进行碰撞处理
+                    if (distance === 0) return false;
+                    
+                    // 如果两个球体的值相同，可以合并
+                    if (this.value === otherBall.value) {
+                        // 开始合并动画
+                        this.isMerging = true;
+                        this.mergeTarget = otherBall;
+                        return true;
+                    }
+                    
+                    // 计算碰撞后的速度变化（物理碰撞）
+                    const nx = dx / distance;
+                    const ny = dy / distance;
+                    
+                    const overlap = (this.radius + otherBall.radius) - distance;
+                    
+                    // 分离球体
+                    this.x -= nx * overlap * 0.5;
+                    this.y -= ny * overlap * 0.5;
+                    otherBall.x += nx * overlap * 0.5;
+                    otherBall.y += ny * overlap * 0.5;
+                    
+                    // 计算相对速度
+                    const dvx = otherBall.vx - this.vx;
+                    const dvy = otherBall.vy - this.vy;
+                    
+                    // 计算相对速度在法线方向上的分量
+                    const velocityAlongNormal = dvx * nx + dvy * ny;
+                    
+                    // 如果球体正在远离，不进行碰撞响应
+                    if (velocityAlongNormal > 0) return false;
+                    
+                    // 计算碰撞后的速度变化
+                    const j = -(1 + this.restitution) * velocityAlongNormal;
+                    const impulse = j / (1/this.value + 1/otherBall.value);
+                    
+                    // 应用冲量
+                    this.vx -= (impulse * nx) / this.value;
+                    this.vy -= (impulse * ny) / this.value;
+                    otherBall.vx += (impulse * nx) / otherBall.value;
+                    otherBall.vy += (impulse * ny) / otherBall.value;
+                    
+                    return false;
+                }
+            }
+            
+            // 生成下一个球体
+            function generateNextBall() {
+                // 确定最大可能的幂次
+                const maxPower = Math.min(
+                    gameState.balls.reduce((max, ball) => Math.max(max, ball.power), 1) + 1, 
+                    20 // 最大到2^20
+                );
+                
+                // 确定最小可能的幂次
+                const minPower = Math.max(1, maxPower - 2);
+                
+                // 随机选择一个幂次，较低的幂次更有可能出现
+                const randomValue = Math.random();
+                let power;
+                
+                if (randomValue < 0.5) {
+                    power = minPower;
+                } else if (randomValue < 0.8) {
+                    power = minPower + 1;
+                } else {
+                    power = Math.min(minPower + 2, maxPower);
+                }
+                
+                gameState.nextBall = new Ball(canvas.width / 2, -50, power);
+            }
+            
+            // 放置球体
+            function placeBall(x, y) {
+                if (gameState.gameOver || gameState.isPaused) return;
+                
+                const newBall = new Ball(x, y, gameState.nextBall.power);
+                
+                // 检查放置是否有效（不与现有球体重叠）
+                const isOverlapping = gameState.balls.some(ball => {
+                    const dx = ball.x - newBall.x;
+                    const dy = ball.y - newBall.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    return distance < ball.radius + newBall.radius;
+                });
+                
+                if (!isOverlapping) {
+                    gameState.balls.push(newBall);
+                    generateNextBall();
+                    return true;
+                }
+                
+                return false;
+            }
+            
+            // 检查合并
+            function checkMerges() {
+                const ballsToRemove = new Set();
+                let merged = false;
+                
+                for (let i = 0; i < gameState.balls.length; i++) {
+                    if (ballsToRemove.has(i)) continue;
+                    
+                    const ballA = gameState.balls[i];
+                    
+                    for (let j = i + 1; j < gameState.balls.length; j++) {
+                        if (ballsToRemove.has(j)) continue;
+                        
+                        const ballB = gameState.balls[j];
+                        
+                        if (ballA.checkCollision(ballB)) {
+                            if (ballA.value === ballB.value) {
+                                // 标记要移除的球
+                                ballsToRemove.add(i);
+                                ballsToRemove.add(j);
+                                
+                                // 创建新的更大的球
+                                const newPower = ballA.power + 1;
+                                const newBall = new Ball(
+                                    (ballA.x + ballB.x) / 2,
+                                    (ballA.y + ballB.y) / 2,
+                                    newPower
+                                );
+                                
+                                // 给予新球一些初始速度
+                                newBall.vx = (ballA.vx + ballB.vx) / 3;
+                                newBall.vy = (ballA.vy + ballB.vy) / 3 - 5; // 稍微向上弹起
+                                
+                                gameState.balls.push(newBall);
+                                
+                                // 更新分数
+                                gameState.score += newBall.value;
+                                document.getElementById('score').textContent = gameState.score;
+                                
+                                // 检查是否达到最高分
+                                if (gameState.score > gameState.bestScore) {
+                                    gameState.bestScore = gameState.score;
+                                    document.getElementById('best-score').textContent = gameState.bestScore;
+                                    localStorage.setItem('powerMergeBestScore', gameState.bestScore);
+                                }
+                                
+                                // 检查是否获胜
+                                if (newBall.power === 20) {
+                                    gameState.victory = true;
+                                    document.getElementById('victory').style.display = 'flex';
+                                }
+                                
+                                merged = true;
+                            } else {
+                                ballA.handleCollision(ballB);
+                            }
+                        }
+                    }
+                }
+                
+                // 移除已合并的球
+                if (ballsToRemove.size > 0) {
+                    gameState.balls = gameState.balls.filter((_, index) => !ballsToRemove.has(index));
+                }
+                
+                return merged;
+            }
+            
+            // 检查游戏是否结束
+            function checkGameOver() {
+                if (gameState.victory) return false;
+                
+                if (!gameState.nextBall) return false;
+                
+                // 如果没有空间放置下一个球，游戏结束
+                for (let x = gameState.nextBall.radius; x < canvas.width - gameState.nextBall.radius; x += gameState.nextBall.radius * 2) {
+                    const testBall = new Ball(x, canvas.height / 2, gameState.nextBall.power);
+                    
+                    const canPlace = !gameState.balls.some(ball => {
+                        const dx = ball.x - testBall.x;
+                        const dy = ball.y - testBall.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        return distance < ball.radius + testBall.radius;
+                    });
+                    
+                    if (canPlace) return false;
+                }
+                
+                gameState.gameOver = true;
+                document.getElementById('final-score').textContent = `Your Score: ${gameState.score}`;
+                document.getElementById('gameOver').style.display = 'flex';
+                return true;
+            }
+            
+            // 更新游戏状态
+            function updateGame(timestamp) {
+                if (gameState.isPaused) return;
+                
+                const deltaTime = timestamp - gameState.lastTimestamp || 0;
+                gameState.lastTimestamp = timestamp;
+                
+                // 更新所有球体
+                const ballsToRemove = [];
+                for (let i = 0; i < gameState.balls.length; i++) {
+                    const ball = gameState.balls[i];
+                    if (ball.update(deltaTime)) {
+                        ballsToRemove.push(i);
+                    }
+                }
+                
+                // 移除完成合并的球体
+                for (let i = ballsToRemove.length - 1; i >= 0; i--) {
+                    gameState.balls.splice(ballsToRemove[i], 1);
+                }
+                
+                // 检查碰撞和合并
+                checkMerges();
+                
+                // 检查游戏是否结束
+                if (!gameState.gameOver && !gameState.victory) {
+                    checkGameOver();
+                }
+                
+                // 绘制游戏
+                drawGame();
+                
+                // 继续游戏循环
+                requestAnimationFrame(updateGame);
+            }
+            
+            // 绘制游戏
+            function drawGame() {
+                // 清空画布
+                ctx.fillStyle = '#0F172A';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 绘制网格背景
+                drawGrid();
+                
+                // 绘制所有球体
+                gameState.balls.forEach(ball => ball.draw());
+                
+                // 如果有下一个球体，绘制预览
+                if (gameState.nextBall && !gameState.gameOver && !gameState.victory) {
+                    const previewX = canvas.width - 70;
+                    const previewY = 70;
+                    
+                    // 绘制预览框
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.roundRect(previewX - 40, previewY - 40, 80, 80, 10);
+                    ctx.fill();
+                    
+                    // 绘制预览标题
+                    ctx.font = '14px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.fillText('Next Ball', previewX, previewY - 50);
+                    
+                    // 绘制预览球体（不应用相机变换）
+                    const previewBall = new Ball(previewX, previewY, gameState.nextBall.power);
+                    previewBall.draw();
+                }
+            }
+            
+            // 绘制网格背景
+            function drawGrid() {
+                const gridSize = 50 * gameState.camera.scale;
+                const offsetX = -gameState.camera.x * gameState.camera.scale % gridSize;
+                const offsetY = -gameState.camera.y * gameState.camera.scale % gridSize;
+                
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                ctx.lineWidth = 1;
+                
+                // 绘制垂直线
+                for (let x = offsetX; x < canvas.width; x += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, canvas.height);
+                    ctx.stroke();
+                }
+                
+                // 绘制水平线
+                for (let y = offsetY; y < canvas.height; y += gridSize) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    ctx.stroke();
+                }
+            }
+            
+            // 初始化游戏
+            function initGame() {
+                gameState.balls = [];
+                gameState.score = 0;
+                gameState.gameOver = false;
+                gameState.victory = false;
+                gameState.camera = {
+                    x: 0,
+                    y: 0,
+                    scale: 1
+                };
+                
+                document.getElementById('score').textContent = '0';
+                document.getElementById('gameOver').style.display = 'none';
+                document.getElementById('victory').style.display = 'none';
+                
+                generateNextBall();
+                
+                // 开始游戏循环
+                gameState.lastTimestamp = 0;
+                requestAnimationFrame(updateGame);
+            }
+            
+            // 事件监听
+            canvas.addEventListener('click', (e) => {
+                if (gameState.isPaused) return;
+                
+                // 将点击坐标转换为游戏世界坐标
+                const rect = canvas.getBoundingClientRect();
+                const clickX = (e.clientX - rect.left) / gameState.camera.scale + gameState.camera.x;
+                const clickY = (e.clientY - rect.top) / gameState.camera.scale + gameState.camera.y;
+                
+                // 放置球体
+                placeBall(clickX, clickY);
+            });
+            
+            // 相机拖动
+            canvas.addEventListener('mousedown', (e) => {
+                if (gameState.isPaused) return;
+                
+                gameState.dragStart = {
+                    x: e.clientX,
+                    y: e.clientY,
+                    cameraX: gameState.camera.x,
+                    cameraY: gameState.camera.y
+                };
+            });
+            
+            canvas.addEventListener('mousemove', (e) => {
+                if (gameState.dragStart && !gameState.isPaused) {
+                    const dx = e.clientX - gameState.dragStart.x;
+                    const dy = e.clientY - gameState.dragStart.y;
+                    
+                    gameState.camera.x = gameState.dragStart.cameraX - dx / gameState.camera.scale;
+                    gameState.camera.y = gameState.dragStart.cameraY - dy / gameState.camera.scale;
+                    
+                    drawGame();
+                }
+            });
+            
+            canvas.addEventListener('mouseup', () => {
+                gameState.dragStart = null;
+            });
+            
+            canvas.addEventListener('mouseleave', () => {
+                gameState.dragStart = null;
+            });
+            
+            // 相机缩放
+            canvas.addEventListener('wheel', (e) => {
+                if (gameState.isPaused) return;
+                
+                e.preventDefault();
+                
+                // 获取鼠标在画布上的位置
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                // 计算鼠标在游戏世界中的位置
+                const worldX = mouseX / gameState.camera.scale + gameState.camera.x;
+                const worldY = mouseY / gameState.camera.scale + gameState.camera.y;
+                
+                // 调整缩放
+                const scaleFactor = e.deltaY < 0 ? 1.1 : 0.9;
+                gameState.camera.scale = Math.max(0.5, Math.min(2, gameState.camera.scale * scaleFactor));
+                
+                // 调整相机位置，使鼠标指向的世界坐标点保持不变
+                gameState.camera.x = worldX - mouseX / gameState.camera.scale;
+                gameState.camera.y = worldY - mouseY / gameState.camera.scale;
+                
+                drawGame();
+            });
+            
+            // 键盘控制
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'r' || e.key === 'R') {
+                    initGame();
+                }
+                
+                if (e.key === ' ' && (gameState.gameOver || gameState.victory)) {
+                    initGame();
+                }
+            });
+            
+            // 按钮事件
+            document.getElementById('start-btn').addEventListener('click', () => {
+                gameState.isPaused = false;
+                document.getElementById('gameOverlay').style.display = 'none';
+                requestAnimationFrame(updateGame);
+            });
+            
+            document.getElementById('restart-btn').addEventListener('click', initGame);
+            document.getElementById('try-again-btn').addEventListener('click', initGame);
+            document.getElementById('play-again-btn').addEventListener('click', initGame);
+            
+            document.getElementById('continue-btn').addEventListener('click', () => {
+                gameState.gameOver = false;
+                document.getElementById('gameOver').style.display = 'none';
+            });
+            
+            // 初始绘制
+            drawGame();
+        });
+    </script>
+</body>
+</html>    

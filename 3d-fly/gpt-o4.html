@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>3D 飞行大战 · Three.js</title>
+  <style>
+    html,body{margin:0;padding:0;overflow:hidden;background:#000;font-family:sans-serif;}
+    #overlay{position:fixed;top:10px;left:10px;color:#fff;z-index:10;}
+    #overlay span{display:inline-block;margin-right:10px;}
+    #healthBar{width:200px;height:20px;background:#333;border:1px solid #aaa;margin-bottom:4px;}
+    #health{width:100%;height:100%;background:#0f0;}
+    #tutorial{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);max-width:60%;text-align:center;color:#fff;background:rgba(0,0,0,.6);padding:8px 12px;border-radius:8px;line-height:1.4;pointer-events:none;z-index:10;}
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <div id="healthBar"><div id="health"></div></div>
+    <span>得分: <strong id="score">0</strong></span>
+    <span>波次: <strong id="wave">1</strong></span>
+  </div>
+  <div id="tutorial"></div>
+  <script type="module">
+/**
+ * 3D 飞行大战
+ * keybind:
+ *  W/S        前后推力
+ *  A/D        左右侧倾
+ *  Q/E        左右翻滚
+ *  鼠标移动     俯仰+偏航
+ *  Space      发射子弹
+ *  F          导弹（冷却）
+ *  Shift      加速
+ *  H          显示/隐藏帮助
+ */
+
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/controls/OrbitControls.js';
+
+const canvas = document.createElement('canvas');
+document.body.appendChild(canvas);
+
+// ================= 工具函数 =================
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+function randomInRange(min,max){return Math.random()*(max-min)+min;}
+function createBasicShip(color=0x3399ff){
+  const geo = new THREE.ConeGeometry(0.6,2,8);
+  const mat = new THREE.MeshStandardMaterial({color});
+  const cone = new THREE.Mesh(geo,mat);
+  cone.rotateX(Math.PI/2);
+  const wingGeo = new THREE.BoxGeometry(1.5,0.1,0.3);
+  const wing = new THREE.Mesh(wingGeo,mat);
+  wing.position.set(0,0,0.2);
+  cone.add(wing);
+  return cone;
+}
+function createEnemyShip(){
+  const geo = new THREE.SphereGeometry(0.8,8,8);
+  const mat = new THREE.MeshStandardMaterial({color:0xff3333});
+  return new THREE.Mesh(geo,mat);
+}
+
+// ================== Bullet ==================
+class Bullet{
+  constructor(pos,dir,speed,scene,isEnemy=false){
+    this.speed=speed;
+    this.dir=dir.clone().normalize();
+    const geo = new THREE.SphereGeometry(0.1,6,6);
+    const mat = new THREE.MeshBasicMaterial({color:isEnemy?0xffaa00:0xffff00});
+    this.mesh = new THREE.Mesh(geo,mat);
+    this.mesh.position.copy(pos);
+    scene.add(this.mesh);
+    this.time=0;
+    this.isEnemy=isEnemy;
+  }
+  update(dt){
+    this.mesh.position.addScaledVector(this.dir,this.speed*dt);
+    this.time+=dt;
+    return this.time<5; // ttl 5s
+  }
+  dispose(scene){scene.remove(this.mesh);}
+}
+
+// ================== Ship ====================
+class Player{
+  constructor(scene,camera){
+    this.mesh=createBasicShip();
+    scene.add(this.mesh);
+    this.camera=camera;
+    this.speed=0;
+    this.health=100;
+    this.coolMissile=0;
+    this.bullets=[];
+    this.scene=scene;
+  }
+  update(dt,input){
+    // thrust
+    const thrust = (input.forward-input.backward)*20;
+    this.speed = clamp(this.speed + thrust*dt,-20,60);
+    // translate
+    const forward = new THREE.Vector3(0,0,-1).applyQuaternion(this.mesh.quaternion);
+    this.mesh.position.addScaledVector(forward,this.speed*dt);
+    // roll/pitch/yaw
+    this.mesh.rotateZ((input.rollRight-input.rollLeft)*dt*2);
+    this.mesh.rotateX((input.pitchDown-input.pitchUp)*dt*1.5);
+    this.mesh.rotateY((input.yawRight-input.yawLeft)*dt*1.5);
+    // camera follow
+    const camOffset = new THREE.Vector3(0,3,8).applyQuaternion(this.mesh.quaternion);
+    this.camera.position.copy(this.mesh.position).add(camOffset);
+    this.camera.lookAt(this.mesh.position);
+    // cooldown
+    if(this.coolMissile>0)this.coolMissile-=dt;
+    // update bullets
+    this.bullets=this.bullets.filter(b=>b.update(dt));
+  }
+  shoot(){
+    const dir = new THREE.Vector3(0,0,-1).applyQuaternion(this.mesh.quaternion);
+    const pos=this.mesh.position.clone().add(dir.clone().multiplyScalar(1.2));
+    this.bullets.push(new Bullet(pos,dir,80,this.scene,false));
+  }
+  missile(){
+    if(this.coolMissile>0)return;
+    const dir = new THREE.Vector3(0,0,-1).applyQuaternion(this.mesh.quaternion);
+    const pos=this.mesh.position.clone().add(dir.clone().multiplyScalar(1.5));
+    this.bullets.push(new Bullet(pos,dir,60,this.scene,false));
+    this.coolMissile=5; // 5s cooldown
+  }
+}
+
+class Enemy{
+  constructor(scene,player){
+    this.mesh=createEnemyShip();
+    // spawn in sphere shell around player
+    const dist= randomInRange(40,60);
+    const theta=Math.random()*Math.PI*2,phi=Math.random()*Math.PI;
+    this.mesh.position.set(
+      player.mesh.position.x+dist*Math.sin(phi)*Math.cos(theta),
+      player.mesh.position.y+dist*Math.cos(phi),
+      player.mesh.position.z+dist*Math.sin(phi)*Math.sin(theta)
+    );
+    scene.add(this.mesh);
+    this.scene=scene;
+    this.player=player;
+    this.bullets=[];
+    this.fireCooldown = randomInRange(1,2);
+    this.health=3;
+  }
+  update(dt){
+    // move towards player
+    const dir = this.player.mesh.position.clone().sub(this.mesh.position).normalize();
+    this.mesh.position.addScaledVector(dir,10*dt);
+    this.mesh.lookAt(this.player.mesh.position);
+    // fire
+    this.fireCooldown-=dt;
+    if(this.fireCooldown<=0){
+      this.fireCooldown=randomInRange(1,2);
+      const bulletDir = dir.clone();
+      const bulletPos = this.mesh.position.clone().add(bulletDir.clone().multiplyScalar(1.5));
+      this.bullets.push(new Bullet(bulletPos,bulletDir,50,this.scene,true));
+    }
+    // update bullets
+    this.bullets=this.bullets.filter(b=>b.update(dt));
+  }
+  dispose(){
+    this.scene.remove(this.mesh);
+  }
+}
+
+// =============== Game =================
+class Game{
+  constructor(){
+    this.scene=new THREE.Scene();
+    this.scene.fog=new THREE.Fog(0x000000,60,120);
+    this.camera=new THREE.PerspectiveCamera(70,window.innerWidth/window.innerHeight,0.1,1000);
+    this.renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+    this.renderer.setSize(window.innerWidth,window.innerHeight);
+    window.addEventListener('resize',()=>this.onResize());
+    // lights
+    const hemi=new THREE.HemisphereLight(0xffffff,0x444488,1);
+    this.scene.add(hemi);
+    const dir=new THREE.DirectionalLight(0xffffff,0.6);
+    dir.position.set(5,10,7);
+    this.scene.add(dir);
+    // stars
+    this.addStars();
+    // entities
+    this.player=new Player(this.scene,this.camera);
+    this.enemies=[];
+    this.wave=1;
+    this.spawnWave();
+    // input
+    this.input={
+      forward:0,backward:0,
+      rollLeft:0,rollRight:0,
+      yawLeft:0,yawRight:0,
+      pitchUp:0,pitchDown:0
+    };
+    this.initInput();
+    // ui
+    this.score=0;
+    this.tutorialSteps=[
+      {text:'欢迎来到 3D 飞行大战！使用W/S控制推力前进/后退。',check:()=>(this.input.forward||this.input.backward)},
+      {text:'使用鼠标移动机头进行俯仰与偏航。',check:()=>true},
+      {text:'按 A/D 侧倾，Q/E 翻滚。',check:()=>(this.input.rollLeft||this.input.rollRight)},
+      {text:'按 Space 发射子弹射击敌人！',check:()=>this.player.bullets.length>0},
+      {text:'敌人出现了！击败它们！',check:()=>this.enemies.length<5},
+      {text:'按 Shift 加速，F 发射导弹（5秒冷却）。',check:()=>this.player.coolMissile<5},
+      {text:'随时按 H 查看帮助，祝你好运！',check:()=>false}
+    ];
+    this.currentTutorial=0;
+    this.updateTutorial(0);
+    // loop
+    this.last=performance.now()/1000;
+    requestAnimationFrame(()=>this.loop());
+  }
+  addStars(){
+    const starGeo=new THREE.BufferGeometry();
+    const starCount=2000;
+    const positions=new Float32Array(starCount*3);
+    for(let i=0;i<starCount;i++){
+      positions[i*3]=randomInRange(-500,500);
+      positions[i*3+1
