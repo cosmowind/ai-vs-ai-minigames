@@ -131,8 +131,9 @@
         </div>
     </div>
 
-    <!-- 引入库文件 -->
-    <script src="js/three.min.js"></script>
+    <!-- 原始产出引用的是本地 js/three.min.js —— 那是模型自写的简化 THREE 桩（已改名为 js/three-STUB.js 保留）；
+         这里换成真正的 Three.js r128 以便完整渲染，桩文件仍可查看 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     
     <!-- 简化版游戏脚本 -->
     <script src="js/simple-game.js"></script>
