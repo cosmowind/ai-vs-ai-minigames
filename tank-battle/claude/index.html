@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tank Battle 3D</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #0a0a0a;
+            font-family: 'Share Tech Mono', monospace;
+            cursor: crosshair;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* HUD Styles */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+        }
+
+        #hud.active {
+            display: block;
+        }
+
+        .hud-panel {
+            background: linear-gradient(135deg, rgba(10, 30, 30, 0.85), rgba(5, 15, 20, 0.9));
+            border: 1px solid rgba(0, 255, 200, 0.3);
+            border-radius: 4px;
+            padding: 12px 16px;
+            color: #00ffc8;
+            text-shadow: 0 0 10px rgba(0, 255, 200, 0.5);
+            box-shadow: 0 0 20px rgba(0, 255, 200, 0.1), inset 0 0 30px rgba(0, 0, 0, 0.5);
+        }
+
+        #health-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            min-width: 200px;
+        }
+
+        #health-bar-container {
+            width: 100%;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid rgba(0, 255, 200, 0.2);
+            margin-top: 8px;
+        }
+
+        #health-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #00ffc8);
+            transition: width 0.3s ease;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+        }
+
+        #health-bar.low {
+            background: linear-gradient(90deg, #ff3344, #ff6655);
+            box-shadow: 0 0 15px rgba(255, 50, 50, 0.5);
+        }
+
+        #score-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            text-align: right;
+            min-width: 180px;
+        }
+
+        .score-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffcc00;
+            text-shadow: 0 0 20px rgba(255, 200, 0, 0.7);
+        }
+
+        .wave-badge {
+            display: inline-block;
+            background: rgba(255, 100, 50, 0.2);
+            border: 1px solid rgba(255, 100, 50, 0.5);
+            padding: 4px 12px;
+            border-radius: 3px;
+            margin-top: 8px;
+            color: #ff6644;
+            font-size: 14px;
+        }
+
+        #weapon-slots {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+        }
+
+        .weapon-slot {
+            width: 70px;
+            height: 70px;
+            background: rgba(10, 20, 30, 0.9);
+            border: 2px solid rgba(0, 255, 200, 0.3);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .weapon-slot.active {
+            border-color: #00ffc8;
+            box-shadow: 0 0 20px rgba(0, 255, 200, 0.4);
+            transform: scale(1.1);
+        }
+
+        .weapon-slot .key {
+            position: absolute;
+            top: 3px;
+            left: 5px;
+            font-size: 10px;
+            color: rgba(0, 255, 200, 0.6);
+        }
+
+        .weapon-slot .icon {
+            font-size: 24px;
+            margin-bottom: 2px;
+        }
+
+        .weapon-slot .name {
+            font-size: 9px;
+            color: #00ffc8;
+            text-transform: uppercase;
+        }
+
+        .weapon-slot .ammo {
+            position: absolute;
+            bottom: 3px;
+            right: 5px;
+            font-size: 10px;
+            color: #ffcc00;
+        }
+
+        #minimap {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 150px;
+            height: 150px;
+            background: rgba(10, 20, 30, 0.85);
+            border: 2px solid rgba(0, 255, 200, 0.3);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #minimap-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            pointer-events: none;
+        }
+
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(0, 255, 200, 0.8);
+        }
+
+        #crosshair::before {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #crosshair::after {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        /* Damage overlay */
+        #damage-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 50%, rgba(255, 0, 0, 0.3) 100%);
+            opacity: 0;
+            transition: opacity 0.1s ease;
+            pointer-events: none;
+        }
+
+        /* Main Menu */
+        #main-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, #0a0a12 0%, #1a1a2e 50%, #0a0a0a 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        #main-menu.hidden {
+            display: none;
+        }
+
+        .game-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 64px;
+            font-weight: 900;
+            color: #00ffc8;
+            text-shadow: 0 0 40px rgba(0, 255, 200, 0.6), 0 0 80px rgba(0, 255, 200, 0.3);
+            margin-bottom: 10px;
+            letter-spacing: 4px;
+        }
+
+        .game-subtitle {
+            font-size: 18px;
+            color: rgba(0, 255, 200, 0.6);
+            margin-bottom: 60px;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+        }
+
+        .menu-btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 18px;
+            padding: 16px 48px;
+            margin: 10px;
+            background: linear-gradient(135deg, rgba(0, 60, 60, 0.8), rgba(0, 40, 40, 0.9));
+            border: 2px solid rgba(0, 255, 200, 0.4);
+            color: #00ffc8;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            pointer-events: auto;
+        }
+
+        .menu-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 100, 100, 0.9), rgba(0, 60, 60, 0.95));
+            border-color: #00ffc8;
+            box-shadow: 0 0 30px rgba(0, 255, 200, 0.5);
+            transform: scale(1.05);
+        }
+
+        .controls-hint {
+            position: absolute;
+            bottom: 30px;
+            color: rgba(0, 255, 200, 0.4);
+            font-size: 14px;
+        }
+
+        .controls-hint span {
+            margin: 0 15px;
+        }
+
+        /* Customization Menu */
+        #customize-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 10, 15, 0.95);
+            display: none;
+            z-index: 90;
+            pointer-events: auto;
+        }
+
+        #customize-menu.active {
+            display: flex;
+        }
+
+        .customize-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            padding: 40px;
+        }
+
+        .loadout-panel {
+            width: 280px;
+            background: rgba(10, 25, 35, 0.9);
+            border: 1px solid rgba(0, 255, 200, 0.3);
+            border-radius: 8px;
+            padding: 24px;
+            margin-right: 30px;
+        }
+
+        .panel-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 16px;
+            color: #00ffc8;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(0, 255, 200, 0.2);
+        }
+
+        .equipped-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: rgba(0, 255, 200, 0.05);
+            border: 1px solid rgba(0, 255, 200, 0.15);
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .equipped-item .icon {
+            font-size: 28px;
+            margin-right: 12px;
+        }
+
+        .equipped-item .info {
+            flex: 1;
+        }
+
+        .equipped-item .name {
+            font-size: 14px;
+            color: #00ffc8;
+            margin-bottom: 2px;
+        }
+
+        .equipped-item .stat {
+            font-size: 11px;
+            color: rgba(0, 255, 200, 0.6);
+        }
+
+        .weapons-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            overflow-y: auto;
+            padding-right: 20px;
+        }
+
+        .weapon-card {
+            background: linear-gradient(135deg, rgba(15, 30, 40, 0.95), rgba(10, 20, 30, 0.98));
+            border: 1px solid rgba(0, 255, 200, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .weapon-card:hover {
+            border-color: rgba(0, 255, 200, 0.5);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(0, 255, 200, 0.15);
+        }
+
+        .weapon-card.owned {
+            border-color: rgba(100, 200, 100, 0.4);
+        }
+
+        .weapon-card.equipped {
+            border-color: #00ffc8;
+            box-shadow: 0 0 25px rgba(0, 255, 200, 0.3);
+        }
+
+        .weapon-card .icon {
+            font-size: 40px;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .weapon-card .name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 13px;
+            color: #00ffc8;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .weapon-card .stats {
+            font-size: 11px;
+            color: rgba(0, 255, 200, 0.7);
+            line-height: 1.6;
+        }
+
+        .weapon-card .cost {
+            text-align: center;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(0, 255, 200, 0.15);
+        }
+
+        .weapon-card .cost button {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            padding: 8px 20px;
+            background: linear-gradient(135deg, rgba(0, 150, 100, 0.8), rgba(0, 100, 70, 0.9));
+            border: 1px solid rgba(0, 255, 150, 0.4);
+            color: #00ff99;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .weapon-card .cost button:hover {
+            background: linear-gradient(135deg, rgba(0, 200, 120, 0.9), rgba(0, 150, 90, 0.95));
+            box-shadow: 0 0 15px rgba(0, 255, 150, 0.4);
+        }
+
+        .weapon-card .cost button:disabled {
+            background: rgba(50, 50, 50, 0.8);
+            border-color: rgba(100, 100, 100, 0.3);
+            color: rgba(150, 150, 150, 0.5);
+            cursor: not-allowed;
+        }
+
+        .weapon-card .cost button.owned-btn {
+            background: rgba(0, 100, 100, 0.6);
+            border-color: rgba(0, 255, 200, 0.3);
+            color: #00ffc8;
+        }
+
+        .close-menu-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            padding: 12px 24px;
+            background: rgba(150, 40, 40, 0.8);
+            border: 1px solid rgba(255, 100, 100, 0.4);
+            color: #ff6666;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .close-menu-btn:hover {
+            background: rgba(200, 50, 50, 0.9);
+            box-shadow: 0 0 20px rgba(255, 100, 100, 0.4);
+        }
+
+        .points-display {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 24px;
+            color: #ffcc00;
+            text-shadow: 0 0 20px rgba(255, 200, 0, 0.6);
+        }
+
+        /* Game Over */
+        #game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 5, 10, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        #game-over.active {
+            display: flex;
+        }
+
+        .game-over-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 56px;
+            font-weight: 900;
+            color: #ff3344;
+            text-shadow: 0 0 40px rgba(255, 50, 70, 0.6);
+            margin-bottom: 20px;
+        }
+
+        .final-score {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 32px;
+            color: #ffcc00;
+            margin-bottom: 10px;
+        }
+
+        .final-wave {
+            font-size: 18px;
+            color: rgba(0, 255, 200, 0.7);
+            margin-bottom: 40px;
+        }
+
+        /* Pause Menu */
+        #pause-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 10, 15, 0.9);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 95;
+        }
+
+        #pause-menu.active {
+            display: flex;
+        }
+
+        .pause-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 48px;
+            color: #00ffc8;
+            margin-bottom: 40px;
+        }
+
+        /* Wave announcement */
+        #wave-announce {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 48px;
+            color: #ff6644;
+            text-shadow: 0 0 40px rgba(255, 100, 70, 0.8);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        #wave-announce.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- Main Menu -->
+        <div id="main-menu">
+            <h1 class="game-title">TANK BATTLE</h1>
+            <p class="game-subtitle">3D Warfare</p>
+            <button class="menu-btn" id="start-btn">Start Battle</button>
+            <button class="menu-btn" id="customize-btn">Loadout</button>
+            <div class="controls-hint">
+                <span>WASD - Move</span>
+                <span>Mouse - Aim</span>
+                <span>Click - Fire</span>
+                <span>TAB - Loadout</span>
+            </div>
+        </div>
+
+        <!-- Customize Menu -->
+        <div id="customize-menu">
+            <div class="points-display">POINTS: <span id="menu-points">0</span></div>
+            <div class="customize-container">
+                <div class="loadout-panel">
+                    <h3 class="panel-title">EQUIPPED</h3>
+                    <div class="equipped-item">
+                        <span class="icon">🔫</span>
+                        <div class="info">
+                            <div class="name" id="equip-primary">Machine Gun</div>
+                            <div class="stat">Primary Weapon</div>
+                        </div>
+                    </div>
+                    <div class="equipped-item">
+                        <span class="icon">🚀</span>
+                        <div class="info">
+                            <div class="name" id="equip-secondary">Missile Launcher</div>
+                            <div class="stat">Secondary Weapon</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="weapons-grid" id="weapons-grid"></div>
+            </div>
+            <button class="close-menu-btn" id="close-customize">BACK TO BATTLE</button>
+        </div>
+
+        <!-- HUD -->
+        <div id="hud">
+            <div id="health-panel" class="hud-panel">
+                <div>HULL INTEGRITY</div>
+                <div id="health-bar-container">
+                    <div id="health-bar" style="width: 100%"></div>
+                </div>
+                <div id="health-text" style="margin-top: 5px; font-size: 14px;">100 / 100</div>
+            </div>
+
+            <div id="score-panel" class="hud-panel">
+                <div>SCORE</div>
+                <div class="score-value" id="score-value">0</div>
+                <div class="wave-badge">WAVE <span id="wave-number">1</span></div>
+            </div>
+
+            <div id="weapon-slots">
+                <div class="weapon-slot active" data-slot="0">
+                    <span class="key">1</span>
+                    <span class="icon" id="slot-icon-0">🔫</span>
+                    <span class="name" id="slot-name-0">MG</span>
+                    <span class="ammo" id="slot-ammo-0">∞</span>
+                </div>
+                <div class="weapon-slot" data-slot="1">
+                    <span class="key">2</span>
+                    <span class="icon" id="slot-icon-1">🚀</span>
+                    <span class="name" id="slot-name-1">MSL</span>
+                    <span class="ammo" id="slot-ammo-1">10</span>
+                </div>
+            </div>
+
+            <div id="minimap">
+                <canvas id="minimap-canvas"></canvas>
+            </div>
+
+            <div id="crosshair"></div>
+            <div id="damage-overlay"></div>
+        </div>
+
+        <div id="wave-announce">WAVE 1</div>
+
+        <!-- Pause Menu -->
+        <div id="pause-menu">
+            <h2 class="pause-title">PAUSED</h2>
+            <button class="menu-btn" id="resume-btn">Resume</button>
+            <button class="menu-btn" id="quit-btn">Quit to Menu</button>
+        </div>
+
+        <!-- Game Over -->
+        <div id="game-over">
+            <h1 class="game-over-title">DESTROYED</h1>
+            <div class="final-score">SCORE: <span id="final-score">0</span></div>
+            <div class="final-wave">Survived to Wave <span id="final-wave">1</span></div>
+            <button class="menu-btn" id="restart-btn">Fight Again</button>
+            <button class="menu-btn" id="menu-btn">Main Menu</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ==================== GAME CONFIG ====================
+        const CONFIG = {
+            ARENA_SIZE: 200,
+            TANK_SPEED: 15,
+            TANK_ROTATION_SPEED: 2.5,
+            CAMERA_DISTANCE: 25,
+            CAMERA_HEIGHT: 18,
+            ENEMY_SPAWN_DISTANCE: 80,
+            RESPAWN_DELAY: 3000
+        };
+
+        // ==================== WEAPON DEFINITIONS ====================
+        const WEAPONS = {
+            machineGun: {
+                id: 'machineGun',
+                name: 'Machine Gun',
+                icon: '🔫',
+                type: 'primary',
+                damage: 5,
+                fireRate: 0.1,
+                ammo: Infinity,
+                cost: 0,
+                projectileSpeed: 80,
+                projectileColor: 0xffcc00,
+                projectileSize: 0.15
+            },
+            cannon: {
+                id: 'cannon',
+                name: 'Cannon',
+                icon: '💣',
+                type: 'primary',
+                damage: 40,
+                fireRate: 1.5,
+                ammo: 20,
+                cost: 500,
+                projectileSpeed: 50,
+                projectileColor: 0xff6600,
+                projectileSize: 0.4,
+                aoe: 5
+            },
+            laser: {
+                id: 'laser',
+                name: 'Laser',
+                icon: '⚡',
+                type: 'primary',
+                damage: 15,
+                fireRate: 0.5,
+                ammo: 50,
+                cost: 300,
+                projectileSpeed: 200,
+                projectileColor: 0x00ffff,
+                projectileSize: 0.1
+            },
+            missile: {
+                id: 'missile',
+                name: 'Missile',
+                icon: '🚀',
+                type: 'secondary',
+                damage: 60,
+                fireRate: 2.0,
+                ammo: 10,
+                cost: 1000,
+                projectileSpeed: 30,
+                projectileColor: 0xff3300,
+                projectileSize: 0.35,
+                homing: true
+            },
+            railgun: {
+                id: 'railgun',
+                name: 'Railgun',
+                icon: '🎯',
+                type: 'primary',
+                damage: 25,
+                fireRate: 3.0,
+                ammo: 5,
+                cost: 2000,
+                projectileSpeed: 300,
+                projectileColor: 0xaa00ff,
+                projectileSize: 0.2,
+                piercing: true
+            },
+            flamethrower: {
+                id: 'flamethrower',
+                name: 'Flamethrower',
+                icon: '🔥',
+                type: 'secondary',
+                damage: 3,
+                fireRate: 0.05,
+                ammo: 100,
+                cost: 750,
+                projectileSpeed: 25,
+                projectileColor: 0xff4400,
+                projectileSize: 0.6
+            }
+        };
+
+        // ==================== GAME STATE ====================
+        const gameState = {
+            score: 0,
+            wave: 1,
+            health: 100,
+            maxHealth: 100,
+            isPlaying: false,
+            isPaused: false,
+            isCustomizing: false,
+            weapons: ['machineGun', 'missile'],
+            currentWeapon: 0,
+            ownedWeapons: ['machineGun', 'missile'],
+            ammo: { missile: 10, cannon: 20, laser: 50, railgun: 5, flamethrower: 100 },
+            enemies: [],
+            projectiles: [],
+            particles: [],
+            damageFlash: 0
+        };
+
+        // ==================== INPUT STATE ====================
+        const keys = { w: false, a: false, s: false, d: false };
+        let mousePos = { x: 0, y: 0 };
+        let isMouseDown = false;
+
+        // ==================== THREE.JS SETUP ====================
+        let scene, camera, renderer, clock;
+        let playerTank, turret, barrel;
+        let groundMesh, minimapCtx;
+
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f14);
+            scene.fog = new THREE.Fog(0x0a0f14, 50, 200);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+            camera.position.set(0, CONFIG.CAMERA_HEIGHT, CONFIG.CAMERA_DISTANCE);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('game-container').insertBefore(renderer.domElement, document.getElementById('main-menu'));
+
+            clock = new THREE.Clock();
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x4466aa, 0.4);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffee, 1.0);
+            dirLight.position.set(50, 80, 30);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 10;
+            dirLight.shadow.camera.far = 200;
+            dirLight.shadow.camera.left = -100;
+            dirLight.shadow.camera.right = 100;
+            dirLight.shadow.camera.top = 100;
+            dirLight.shadow.camera.bottom = -100;
+            scene.add(dirLight);
+
+            // Ground
+            createGround();
+
+            // Minimap
+            const minimapCanvas = document.getElementById('minimap-canvas');
+            minimapCanvas.width = 150;
+            minimapCanvas.height = 150;
+            minimapCtx = minimapCanvas.getContext('2d');
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createGround() {
+            const groundGeo = new THREE.PlaneGeometry(CONFIG.ARENA_SIZE * 2, CONFIG.ARENA_SIZE * 2, 50, 50);
+            const groundMat = new THREE.MeshStandardMaterial({
+                color: 0x1a2a1a,
+                roughness: 0.9,
+                metalness: 0.1
+            });
+            groundMesh = new THREE.Mesh(groundGeo, groundMat);
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.receiveShadow = true;
+            scene.add(groundMesh);
+
+            // Grid lines
+            const gridHelper = new THREE.GridHelper(CONFIG.ARENA_SIZE * 2, 40, 0x2a4a2a, 0x1a3a1a);
+            gridHelper.position.y = 0.01;
+            scene.add(gridHelper);
+
+            // Barriers/obstacles
+            createObstacles();
+        }
+
+        function createObstacles() {
+            const barrierMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.8 });
+            const positions = [
+                { x: 30, z: 30 }, { x: -30, z: 30 }, { x: 30, z: -30 }, { x: -30, z: -30 },
+                { x: 60, z: 0 }, { x: -60, z: 0 }, { x: 0, z: 60 }, { x: 0, z: -60 },
+                { x: 45, z: 45 }, { x: -45, z: 45 }, { x: 45, z: -45 }, { x: -45, z: -45 }
+            ];
+
+            positions.forEach(pos => {
+                const barrierGeo = new THREE.BoxGeometry(8, 3, 8);
+                const barrier = new THREE.Mesh(barrierGeo, barrierMat);
+                barrier.position.set(pos.x, 1.5, pos.z);
+                barrier.castShadow = true;
+                barrier.receiveShadow = true;
+                barrier.userData.isObstacle = true;
+                barrier.userData.health = 50;
+                scene.add(barrier);
+            });
+        }
+
+        function createTankMesh(isPlayer = true, color = 0x00cc66) {
+            const group = new THREE.Group();
+
+            const hullMat = new THREE.MeshStandardMaterial({
+                color: isPlayer ? 0x2d5a2d : 0x5a2d2d,
+                roughness: 0.6,
+                metalness: 0.4
+            });
+
+            const accentMat = new THREE.MeshStandardMaterial({
+                color: isPlayer ? 0xd4a017 : 0x8b0000,
+                roughness: 0.4,
+                metalness: 0.6
+            });
+
+            // Hull
+            const hullGeo = new THREE.BoxGeometry(4, 1.5, 6);
+            const hull = new THREE.Mesh(hullGeo, hullMat);
+            hull.position.y = 1;
+            hull.castShadow = true;
+            group.add(hull);
+
+            // Tracks
+            const trackGeo = new THREE.BoxGeometry(0.8, 1, 6.5);
+            const trackMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
+            const leftTrack = new THREE.Mesh(trackGeo, trackMat);
+            leftTrack.position.set(-2, 0.5, 0);
+            leftTrack.castShadow = true;
+            group.add(leftTrack);
+
+            const rightTrack = new THREE.Mesh(trackGeo, trackMat);
+            rightTrack.position.set(2, 0.5, 0);
+            rightTrack.castShadow = true;
+            group.add(rightTrack);
+
+            // Turret base
+            const turretGroup = new THREE.Group();
+            const turretGeo = new THREE.CylinderGeometry(1.5, 1.8, 1, 8);
+            const turretMesh = new THREE.Mesh(turretGeo, hullMat);
+            turretMesh.position.y = 0.5;
+            turretMesh.castShadow = true;
+            turretGroup.add(turretMesh);
+
+            // Barrel
+            const barrelGeo = new THREE.CylinderGeometry(0.2, 0.25, 4, 8);
+            const barrelMesh = new THREE.Mesh(barrelGeo, accentMat);
+            barrelMesh.rotation.x = Math.PI / 2;
+            barrelMesh.position.set(0, 0.6, 2.5);
+            barrelMesh.castShadow = true;
+            turretGroup.add(barrelMesh);
+            group.barrel = barrelMesh;
+
+            group.add(turretGroup);
+            group.turret = turretGroup;
+
+            // Accent stripes
+            const stripeGeo = new THREE.BoxGeometry(4.1, 0.3, 0.5);
+            const frontStripe = new THREE.Mesh(stripeGeo, accentMat);
+            frontStripe.position.set(0, 1.3, 3);
+            group.add(frontStripe);
+
+            return group;
+        }
+
+        // ==================== PLAYER ====================
+        function createPlayer() {
+            playerTank = createTankMesh(true, 0x00cc66);
+            playerTank.position.set(0, 0, 0);
+            scene.add(playerTank);
+
+            turret = playerTank.turret;
+            barrel = playerTank.barrel;
+        }
+
+        function updatePlayer(delta) {
+            if (!gameState.isPlaying || gameState.isPaused || gameState.isCustomizing) return;
+
+            const speed = CONFIG.TANK_SPEED * delta;
+
+            // Movement
+            let moved = false;
+            if (keys.w) { playerTank.position.z -= speed; moved = true; }
+            if (keys.s) { playerTank.position.z += speed; moved = true; }
+            if (keys.a) { playerTank.position.x -= speed; moved = true; }
+            if (keys.d) { playerTank.position.x += speed; moved = true; }
+
+            // Clamp to arena
+            const limit = CONFIG.ARENA_SIZE - 10;
+            playerTank.position.x = Math.max(-limit, Math.min(limit, playerTank.position.x));
+            playerTank.position.z = Math.max(-limit, Math.min(limit, playerTank.position.z));
+
+            // Turret rotation towards mouse
+            const raycaster = new THREE.Raycaster();
+            const mouseNDC = new THREE.Vector2(
+                (mousePos.x / window.innerWidth) * 2 - 1,
+                -(mousePos.y / window.innerHeight) * 2 + 1
+            );
+            raycaster.setFromCamera(mouseNDC, camera);
+
+            const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const targetPos = new THREE.Vector3();
+            raycaster.ray.intersectPlane(groundPlane, targetPos);
+
+            if (targetPos) {
+                const dx = targetPos.x - playerTank.position.x;
+                const dz = targetPos.z - playerTank.position.z;
+                const targetAngle = Math.atan2(dx, dz);
+                turret.rotation.y = targetAngle;
+            }
+
+            // Firing
+            if (isMouseDown) {
+                fireWeapon();
+            }
+        }
+
+        // ==================== WEAPONS ====================
+        let lastFireTime = 0;
+
+        function fireWeapon() {
+            const weaponId = gameState.weapons[gameState.currentWeapon];
+            const weapon = WEAPONS[weaponId];
+            const now = clock.getElapsedTime();
+
+            if (now - lastFireTime < weapon.fireRate) return;
+
+            // Check ammo
+            if (weapon.ammo !== Infinity && gameState.ammo[weaponId] <= 0) return;
+
+            lastFireTime = now;
+
+            // Consume ammo
+            if (weapon.ammo !== Infinity) {
+                gameState.ammo[weaponId]--;
+                updateAmmoDisplay();
+            }
+
+            // Create projectile - direction is barrel's local +Z in world space
+            const direction = new THREE.Vector3(0, 0, 1);
+            direction.applyQuaternion(turret.getWorldQuaternion(new THREE.Quaternion()));
+
+            const startPos = playerTank.position.clone();
+            startPos.y = 2;
+            startPos.add(direction.clone().multiplyScalar(4));
+
+            createProjectile(startPos, direction, weapon, true);
+
+            // Muzzle flash
+            createMuzzleFlash(startPos);
+        }
+
+        function createProjectile(position, direction, weapon, isPlayer) {
+            const geo = new THREE.SphereGeometry(weapon.projectileSize, 8, 8);
+            const mat = new THREE.MeshBasicMaterial({
+                color: weapon.projectileColor,
+                emissive: weapon.projectileColor
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(position);
+            scene.add(mesh);
+
+            const projectile = {
+                mesh,
+                direction: direction.clone(),
+                speed: weapon.projectileSpeed,
+                damage: weapon.damage,
+                isPlayer,
+                weapon,
+                lifetime: 0,
+                maxLifetime: 3
+            };
+
+            gameState.projectiles.push(projectile);
+        }
+
+        function createMuzzleFlash(position) {
+            const light = new THREE.PointLight(0xffaa00, 3, 10);
+            light.position.copy(position);
+            scene.add(light);
+
+            setTimeout(() => scene.remove(light), 50);
+        }
+
+        function updateProjectiles(delta) {
+            for (let i = gameState.projectiles.length - 1; i >= 0; i--) {
+                const proj = gameState.projectiles[i];
+                proj.lifetime += delta;
+
+                // Movement
+                const moveStep = proj.direction.clone().multiplyScalar(proj.speed * delta);
+                proj.mesh.position.add(moveStep);
+
+                // Homing for missiles
+                if (proj.weapon.homing && !proj.isPlayer) {
+                    const target = playerTank.position;
+                    const toTarget = target.clone().sub(proj.mesh.position).normalize();
+                    proj.direction.lerp(toTarget, 0.05);
+                }
+
+                // Trail particles
+                if (Math.random() > 0.5) {
+                    createParticle(proj.mesh.position.clone(), proj.weapon.projectileColor, 0.3);
+                }
+
+                // Check lifetime
+                if (proj.lifetime > proj.maxLifetime) {
+                    scene.remove(proj.mesh);
+                    gameState.projectiles.splice(i, 1);
+                    continue;
+                }
+
+                // Check collisions
+                if (proj.isPlayer) {
+                    // Check enemy hits
+                    for (let j = gameState.enemies.length - 1; j >= 0; j--) {
+                        const enemy = gameState.enemies[j];
+                        const dist = proj.mesh.position.distanceTo(enemy.mesh.position);
+                        if (dist < 4) {
+                            damageEnemy(j, proj.damage, proj.weapon);
+                            scene.remove(proj.mesh);
+                            gameState.projectiles.splice(i, 1);
+                            createExplosion(proj.mesh.position.clone(), 0.5);
+                            break;
+                        }
+                    }
+                } else {
+                    // Check player hit
+                    const dist = proj.mesh.position.distanceTo(playerTank.position);
+                    if (dist < 4) {
+                        damagePlayer(proj.damage);
+                        scene.remove(proj.mesh);
+                        gameState.projectiles.splice(i, 1);
+                        createExplosion(proj.mesh.position.clone(), 0.5);
+                    }
+                }
+
+                // Check obstacle hits
+                scene.traverse(obj => {
+                    if (obj.userData && obj.userData.isObstacle) {
+                        const dist = proj.mesh.position.distanceTo(obj.position);
+                        if (dist < 5) {
+                            obj.userData.health -= proj.damage;
+                            createExplosion(proj.mesh.position.clone(), 0.3);
+                            if (obj.userData.health <= 0) {
+                                scene.remove(obj);
+                            }
+                            scene.remove(proj.mesh);
+                            gameState.projectiles.splice(i, 1);
+                        }
+                    }
+                });
+            }
+        }
+
+        // ==================== ENEMIES ====================
+        function spawnEnemy() {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = CONFIG.ENEMY_SPAWN_DISTANCE;
+            const x = Math.cos(angle) * dist;
+            const z = Math.sin(angle) * dist;
+
+            const enemyTank = createTankMesh(false, 0xcc3333);
+            enemyTank.position.set(x, 0, z);
+            scene.add(enemyTank);
+
+            // Random enemy type
+            const types = ['scout', 'soldier', 'heavy'];
+            const type = types[Math.floor(Math.random() * types.length)];
+
+            const enemy = {
+                mesh: enemyTank,
+                type,
+                health: type === 'heavy' ? 80 : type === 'soldier' ? 50 : 30,
+                maxHealth: type === 'heavy' ? 80 : type === 'soldier' ? 50 : 30,
+                speed: type === 'scout' ? 10 : type === 'soldier' ? 7 : 4,
+                damage: type === 'heavy' ? 15 : type === 'soldier' ? 8 : 4,
+                fireRate: type === 'scout' ? 1.5 : type === 'soldier' ? 1.0 : 2.0,
+                lastFire: 0,
+                state: 'patrol',
+                patrolTarget: new THREE.Vector3(
+                    (Math.random() - 0.5) * 100,
+                    0,
+                    (Math.random() - 0.5) * 100
+                ),
+                score: type === 'heavy' ? 50 : type === 'soldier' ? 25 : 10
+            };
+
+            gameState.enemies.push(enemy);
+        }
+
+        function updateEnemies(delta) {
+            const playerPos = playerTank.position;
+            const waveMultiplier = 1 + (gameState.wave - 1) * 0.1;
+
+            for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+                const enemy = gameState.enemies[i];
+                const distToPlayer = enemy.mesh.position.distanceTo(playerPos);
+
+                // State machine
+                if (distToPlayer < 50) {
+                    enemy.state = 'chase';
+                } else if (distToPlayer < 35) {
+                    enemy.state = 'attack';
+                } else {
+                    enemy.state = 'patrol';
+                }
+
+                // Behavior
+                if (enemy.state === 'patrol') {
+                    const toTarget = enemy.patrolTarget.clone().sub(enemy.mesh.position);
+                    if (toTarget.length() < 5) {
+                        enemy.patrolTarget.set(
+                            (Math.random() - 0.5) * 100,
+                            0,
+                            (Math.random() - 0.5) * 100
+                        );
+                    }
+                    toTarget.normalize();
+                    enemy.mesh.position.add(toTarget.multiplyScalar(enemy.speed * 0.3 * delta));
+                    enemy.mesh.rotation.y = Math.atan2(toTarget.x, toTarget.z);
+                } else if (enemy.state === 'chase') {
+                    const toPlayer = playerPos.clone().sub(enemy.mesh.position).normalize();
+                    enemy.mesh.position.add(toPlayer.multiplyScalar(enemy.speed * delta));
+                    enemy.mesh.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
+                } else if (enemy.state === 'attack') {
+                    const toPlayer = playerPos.clone().sub(enemy.mesh.position).normalize();
+                    enemy.mesh.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
+
+                    // Fire at player
+                    const now = clock.getElapsedTime();
+                    if (now - enemy.lastFire > enemy.fireRate) {
+                        enemy.lastFire = now;
+                        const dir = toPlayer.clone();
+                        createProjectile(
+                            enemy.mesh.position.clone().add(new THREE.Vector3(0, 2, 0)),
+                            dir,
+                            { ...WEAPONS.machineGun, damage: enemy.damage * waveMultiplier },
+                            false
+                        );
+                    }
+                }
+
+                // Clamp to arena
+                const limit = CONFIG.ARENA_SIZE - 10;
+                enemy.mesh.position.x = Math.max(-limit, Math.min(limit, enemy.mesh.position.x));
+                enemy.mesh.position.z = Math.max(-limit, Math.min(limit, enemy.mesh.position.z));
+            }
+        }
+
+        function damageEnemy(index, damage, weapon) {
+            const enemy = gameState.enemies[index];
+            enemy.health -= damage;
+
+            // AOE damage
+            if (weapon.aoe) {
+                gameState.enemies.forEach((other, otherIndex) => {
+                    if (otherIndex !== index) {
+                        const dist = enemy.mesh.position.distanceTo(other.mesh.position);
+                        if (dist < weapon.aoe) {
+                            other.health -= damage * 0.5;
+                        }
+                    }
+                });
+            }
+
+            // Check death
+            if (enemy.health <= 0) {
+                gameState.score += enemy.score;
+                updateScore();
+                createExplosion(enemy.mesh.position.clone(), 1.5);
+                scene.remove(enemy.mesh);
+                gameState.enemies.splice(index, 1);
+                checkWaveComplete();
+            }
+        }
+
+        function damagePlayer(damage) {
+            gameState.health -= damage;
+            gameState.damageFlash = 0.3;
+            updateHealthBar();
+
+            if (gameState.health <= 0) {
+                gameOver();
+            }
+        }
+
+        // ==================== EFFECTS ====================
+        function createParticle(position, color, size) {
+            const geo = new THREE.SphereGeometry(size, 6, 6);
+            const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(position);
+            scene.add(mesh);
+
+            gameState.particles.push({
+                mesh,
+                velocity: new THREE.Vector3(
+                    (Math.random() - 0.5) * 5,
+                    Math.random() * 5 + 2,
+                    (Math.random() - 0.5) * 5
+                ),
+                lifetime: 0,
+                maxLifetime: 0.5
+            });
+        }
+
+        function updateParticles(delta) {
+            for (let i = gameState.particles.length - 1; i >= 0; i--) {
+                const p = gameState.particles[i];
+                p.lifetime += delta;
+                p.mesh.position.add(p.velocity.clone().multiplyScalar(delta));
+                p.velocity.y -= 15 * delta;
+                p.mesh.material.opacity = 1 - (p.lifetime / p.maxLifetime);
+
+                if (p.lifetime >= p.maxLifetime) {
+                    scene.remove(p.mesh);
+                    gameState.particles.splice(i, 1);
+                }
+            }
+        }
+
+        function createExplosion(position, scale) {
+            // Particles
+            for (let i = 0; i < 15; i++) {
+                const color = Math.random() > 0.5 ? 0xff6600 : 0xffaa00;
+                createParticle(position.clone(), color, 0.2 * scale);
+            }
+
+            // Light flash
+            const light = new THREE.PointLight(0xff4400, 5 * scale, 20 * scale);
+            light.position.copy(position);
+            scene.add(light);
+            setTimeout(() => scene.remove(light), 100);
+        }
+
+        // ==================== WAVE SYSTEM ====================
+        function checkWaveComplete() {
+            if (gameState.enemies.length === 0) {
+                gameState.wave++;
+                updateWaveDisplay();
+                announceWave();
+
+                // Spawn new enemies after delay
+                setTimeout(() => {
+                    const enemyCount = 3 + gameState.wave * 2;
+                    for (let i = 0; i < enemyCount; i++) {
+                        setTimeout(() => spawnEnemy(), i * 500);
+                    }
+                }, 2000);
+            }
+        }
+
+        function announceWave() {
+            const announce = document.getElementById('wave-announce');
+            announce.textContent = `WAVE ${gameState.wave}`;
+            announce.classList.add('show');
+            setTimeout(() => announce.classList.remove('show'), 2000);
+        }
+
+        // ==================== UI UPDATES ====================
+        function updateHealthBar() {
+            const percent = (gameState.health / gameState.maxHealth) * 100;
+            const bar = document.getElementById('health-bar');
+            bar.style.width = percent + '%';
+            bar.classList.toggle('low', percent < 30);
+            document.getElementById('health-text').textContent =
+                `${Math.ceil(gameState.health)} / ${gameState.maxHealth}`;
+        }
+
+        function updateScore() {
+            document.getElementById('score-value').textContent = gameState.score.toLocaleString();
+        }
+
+        function updateWaveDisplay() {
+            document.getElementById('wave-number').textContent = gameState.wave;
+        }
+
+        function updateAmmoDisplay() {
+            const weaponId = gameState.weapons[gameState.currentWeapon];
+            const weapon = WEAPONS[weaponId];
+            const ammoEl = document.getElementById(`slot-ammo-${gameState.currentWeapon}`);
+            ammoEl.textContent = weapon.ammo === Infinity ? '∞' : gameState.ammo[weaponId];
+        }
+
+        function updateMinimap() {
+            if (!minimapCtx) return;
+
+            minimapCtx.fillStyle = 'rgba(10, 30, 30, 0.9)';
+            minimapCtx.fillRect(0, 0, 150, 150);
+
+            const scale = 150 / (CONFIG.ARENA_SIZE * 2);
+            const centerX = 75;
+            const centerY = 75;
+
+            // Player
+            minimapCtx.fillStyle = '#00ffc8';
+            minimapCtx.beginPath();
+            minimapCtx.arc(
+                centerX + playerTank.position.x * scale,
+                centerY + playerTank.position.z * scale,
+                4, 0, Math.PI * 2
+            );
+            minimapCtx.fill();
+
+            // Enemies
+            minimapCtx.fillStyle = '#ff4444';
+            gameState.enemies.forEach(enemy => {
+                minimapCtx.beginPath();
+                minimapCtx.arc(
+                    centerX + enemy.mesh.position.x * scale,
+                    centerY + enemy.mesh.position.z * scale,
+                    3, 0, Math.PI * 2
+                );
+                minimapCtx.fill();
+            });
+        }
+
+        // ==================== CUSTOMIZATION ====================
+        function updateCustomizeMenu() {
+            document.getElementById('menu-points').textContent = gameState.score.toLocaleString();
+
+            const grid = document.getElementById('weapons-grid');
+            grid.innerHTML = '';
+
+            Object.values(WEAPONS).forEach(weapon => {
+                const owned = gameState.ownedWeapons.includes(weapon.id);
+                const equipped = gameState.weapons[gameState.currentWeapon] === weapon.id;
+
+                const card = document.createElement('div');
+                card.className = 'weapon-card' + (owned ? ' owned' : '') + (equipped ? ' equipped' : '');
+                card.innerHTML = `
+                    <div class="icon">${weapon.icon}</div>
+                    <div class="name">${weapon.name}</div>
+                    <div class="stats">
+                        DMG: ${weapon.damage}<br>
+                        RATE: ${(1/weapon.fireRate).toFixed(1)}/s<br>
+                        ${weapon.ammo === Infinity ? 'AMMO: ∞' : `AMMO: ${weapon.ammo}`}
+                    </div>
+                    <div class="cost">
+                        ${owned
+                            ? `<button class="owned-btn" ${equipped ? 'disabled' : ''}>
+                                ${equipped ? 'EQUIPPED' : 'EQUIP'}
+                               </button>`
+                            : `<button ${gameState.score < weapon.cost ? 'disabled' : ''}>
+                                BUY (${weapon.cost})
+                               </button>`
+                        }
+                    </div>
+                `;
+
+                card.querySelector('button').addEventListener('click', () => {
+                    if (owned) {
+                        // Equip
+                        gameState.weapons[gameState.currentWeapon] = weapon.id;
+                        updateWeaponSlots();
+                        updateCustomizeMenu();
+                    } else if (gameState.score >= weapon.cost) {
+                        // Purchase
+                        gameState.score -= weapon.cost;
+                        gameState.ownedWeapons.push(weapon.id);
+                        gameState.ammo[weapon.id] = weapon.ammo;
+                        updateScore();
+                        updateCustomizeMenu();
+                    }
+                });
+
+                grid.appendChild(card);
+            });
+
+            document.getElementById('equip-primary').textContent =
+                WEAPONS[gameState.weapons[0]].name;
+            document.getElementById('equip-secondary').textContent =
+                WEAPONS[gameState.weapons[1]].name;
+        }
+
+        function updateWeaponSlots() {
+            for (let i = 0; i < 2; i++) {
+                const weapon = WEAPONS[gameState.weapons[i]];
+                document.getElementById(`slot-icon-${i}`).textContent = weapon.icon;
+                document.getElementById(`slot-name-${i}`).textContent = weapon.name.substring(0, 3).toUpperCase();
+                document.getElementById(`slot-ammo-${i}`).textContent =
+                    weapon.ammo === Infinity ? '∞' : gameState.ammo[weapon.id];
+            }
+
+            document.querySelectorAll('.weapon-slot').forEach((slot, i) => {
+                slot.classList.toggle('active', i === gameState.currentWeapon);
+            });
+        }
+
+        // ==================== GAME STATES ====================
+        function startGame() {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('hud').classList.add('active');
+
+            gameState.isPlaying = true;
+            gameState.isPaused = false;
+            gameState.score = 0;
+            gameState.wave = 1;
+            gameState.health = 100;
+
+            updateHealthBar();
+            updateScore();
+            updateWaveDisplay();
+            updateWeaponSlots();
+
+            // Reset enemies
+            gameState.enemies.forEach(e => scene.remove(e.mesh));
+            gameState.enemies = [];
+
+            // Spawn initial enemies
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => spawnEnemy(), i * 500);
+            }
+        }
+
+        function pauseGame() {
+            if (!gameState.isPlaying) return;
+            gameState.isPaused = true;
+            document.getElementById('pause-menu').classList.add('active');
+        }
+
+        function resumeGame() {
+            gameState.isPaused = false;
+            document.getElementById('pause-menu').classList.remove('active');
+        }
+
+        function gameOver() {
+            gameState.isPlaying = false;
+            document.getElementById('game-over').classList.add('active');
+            document.getElementById('final-score').textContent = gameState.score.toLocaleString();
+            document.getElementById('final-wave').textContent = gameState.wave;
+
+            // Clean up
+            gameState.enemies.forEach(e => scene.remove(e.mesh));
+            gameState.enemies = [];
+            gameState.projectiles.forEach(p => scene.remove(p.mesh));
+            gameState.projectiles = [];
+        }
+
+        function returnToMenu() {
+            document.getElementById('main-menu').classList.remove('hidden');
+            document.getElementById('hud').classList.remove('active');
+            document.getElementById('game-over').classList.remove('active');
+            document.getElementById('pause-menu').classList.remove('active');
+
+            gameState.isPlaying = false;
+            gameState.isPaused = false;
+        }
+
+        // ==================== INPUT HANDLING ====================
+        function setupInputs() {
+            document.addEventListener('keydown', e => {
+                const key = e.key.toLowerCase();
+                if (key in keys) keys[key] = true;
+
+                if (key === 'tab') {
+                    e.preventDefault();
+                    if (gameState.isPlaying && !gameState.isPaused) {
+                        gameState.isCustomizing = !gameState.isCustomizing;
+                        document.getElementById('customize-menu').classList.toggle('active', gameState.isCustomizing);
+                        if (gameState.isCustomizing) updateCustomizeMenu();
+                    }
+                }
+
+                if (key === 'escape' || key === 'p') {
+                    if (gameState.isCustomizing) {
+                        gameState.isCustomizing = false;
+                        document.getElementById('customize-menu').classList.remove('active');
+                    } else if (gameState.isPlaying) {
+                        pauseGame();
+                    }
+                }
+
+                if (key === '1') gameState.currentWeapon = 0;
+                if (key === '2') gameState.currentWeapon = 1;
+            });
+
+            document.addEventListener('keyup', e => {
+                const key = e.key.toLowerCase();
+                if (key in keys) keys[key] = false;
+            });
+
+            document.addEventListener('mousemove', e => {
+                mousePos.x = e.clientX;
+                mousePos.y = e.clientY;
+            });
+
+            document.addEventListener('mousedown', e => {
+                if (e.button === 0) isMouseDown = true;
+            });
+
+            document.addEventListener('mouseup', e => {
+                if (e.button === 0) isMouseDown = false;
+            });
+
+            // Menu buttons
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('customize-btn').addEventListener('click', () => {
+                gameState.isCustomizing = true;
+                document.getElementById('main-menu').classList.add('hidden');
+                document.getElementById('customize-menu').classList.add('active');
+                updateCustomizeMenu();
+            });
+            document.getElementById('close-customize').addEventListener('click', () => {
+                gameState.isCustomizing = false;
+                document.getElementById('customize-menu').classList.remove('active');
+                if (gameState.isPlaying) {
+                    document.getElementById('hud').classList.add('active');
+                } else {
+                    document.getElementById('main-menu').classList.remove('hidden');
+                }
+            });
+            document.getElementById('resume-btn').addEventListener('click', resumeGame);
+            document.getElementById('quit-btn').addEventListener('click', returnToMenu);
+            document.getElementById('restart-btn').addEventListener('click', () => {
+                document.getElementById('game-over').classList.remove('active');
+                startGame();
+            });
+            document.getElementById('menu-btn').addEventListener('click', returnToMenu);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ==================== CAMERA ====================
+        function updateCamera() {
+            if (!playerTank) return;
+
+            const targetPos = playerTank.position.clone();
+            targetPos.y = CONFIG.CAMERA_HEIGHT;
+            targetPos.z += CONFIG.CAMERA_DISTANCE;
+
+            camera.position.lerp(targetPos, 0.05);
+            camera.lookAt(playerTank.position);
+        }
+
+        // ==================== MAIN LOOP ====================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            if (gameState.isPlaying && !gameState.isPaused && !gameState.isCustomizing) {
+                updatePlayer(delta);
+                updateEnemies(delta);
+                updateProjectiles(delta);
+                updateParticles(delta);
+                updateCamera();
+                updateMinimap();
+
+                // Damage flash
+                if (gameState.damageFlash > 0) {
+                    gameState.damageFlash -= delta;
+                    document.getElementById('damage-overlay').style.opacity = gameState.damageFlash;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // ==================== INIT ====================
+        initThreeJS();
+        createPlayer();
+        setupInputs();
+        updateWeaponSlots();
+        animate();
+    </script>
+</body>
+</html>

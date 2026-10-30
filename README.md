@@ -37,15 +37,16 @@ prompt（原文见 [`3d-fly/prompt1.txt`](3d-fly/prompt1.txt)）：
 
 ### 3. 3D 坦克大战 · [`tank-battle/`](tank-battle/)
 
-三个不同 AI 工具产出的工程（不只是单文件），所以形态差别最大：
+四个不同 AI 工具产出的工程（不只是单文件），所以形态差别最大：
 
 | 版本 | 目录 | 形态 | 实测状态 |
 |---|---|---|---|
 | Qoder | [`tank-battle/qoder/`](tank-battle/qoder/) | 单页 + 模块化 `js/`（ECS 风格组件/系统分层） | ✅ 已修复（`cannon.js/0.20.0` 在 cdnjs 上不存在，改 0.6.2）。现在渲染出完整 3D 竞技场与组件面板；面板里有 `7.199999999999999m/s²` 这类未格式化的浮点 |
 | Trae | [`tank-battle/trae/`](tank-battle/trae/) | 单页 + `js/` | ✅ 已改引用真·Three.js r128（控制台零报错）；模型手写的**简化 THREE 桩**保留为 `js/three-STUB.js`，文件头注释自己写着"由于CDN可能无法访问，这里提供一个简化的Three.js版本" |
+| Claude | [`tank-battle/claude/`](tank-battle/claude/) | **单个 58,287 B 的 `index.html`**（内联脚本 38,346 字符）+ 自带 `SPEC.md` 规格清单 | ✅ **一字未改就能玩**：点 START BATTLE 进战斗（`#main-menu` 转 `display:none`、`gameState.isPlaying=true`）、TAB 打开改装面板、主场景与 150×150 小地图两块 canvas、跑起来 Console 零报错。依赖 cdnjs `three.js/r128`（实测 200 / 603,445 B）+ Google Fonts，**断网打不开**。开火/命中/波次刷怪我没有逐项验，不在此宣称 |
 | Vite 工程 | [`tank-battle/vite/`](tank-battle/vite/) | Vite + ES 模块 + 设计文档 | 需要 `npm install && npm run dev`（本仓库未包含 `dist/` 构建产物） |
 
-配套的规格文档在 `tank-battle/vite-VIBE-README.md`（VIBE 版设计说明）。
+配套的规格文档：`tank-battle/vite-VIBE-README.md`（VIBE 版设计说明）、`tank-battle/claude/SPEC.md`（Claude 版自带的分系统验收清单，含"60 FPS with 15+ enemies""input lag < 50ms"这类它自己给自己定的目标）。
 
 ## 复现这些实验
 
